@@ -67,7 +67,7 @@ class ADGate(nn.Module):
             if paras is None:
                 self.paras = tc.randn((len(self.settings['h_directions']), ))
             self.paras = self.paras.to(device=self.device, dtype=tc.float64)
-        elif self.name == 'latent':
+        elif self.name == 'latent' or self.name == 'new_latent':
             if paras is None:
                 if self.pos is None:
                     ndim = 2
@@ -125,6 +125,8 @@ class ADGate(nn.Module):
             self.tensor = tc.matrix_exp(-1j * self.settings['tau'] * h)
         elif self.name == 'latent':
             self.tensor = self.latent2unitary(self.paras)
+        elif self.name == 'new_latent':
+            self.tensor = self.new_lantent2unitary(self.paras)
         elif self.name == 'arbitrary':
             self.tensor = self.paras
 
@@ -132,6 +134,13 @@ class ADGate(nn.Module):
     def latent2unitary(g):
         u, _, v = tc.linalg.svd(g)
         return u.mm(v)
+
+    @staticmethod
+    def new_lantent2unitary(g):
+        u, s, v = tc.linalg.svd(g)
+        e = tc.diag_embed(s)
+        f = e / tc.sqrt(tc.mul(e, e.conj()))
+        return u.mm(tc.tensor(f, dtype=tc.complex128)).mm(v)
 
 
 class ADQC_basic(nn.Module):
