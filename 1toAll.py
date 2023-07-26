@@ -14,13 +14,13 @@ time_tot = args.time
 tau = 0.01
 device = tc.device('cuda:0')
 dtype = tc.complex128
+print('=='*10)
+print('print interval = {}, total time = {}'.format(interval, time_tot))
 
 qc = tc.load('GraduationProject/Data/qc_dt{:d}_tot{:.0f}.pth'.format(interval, time_tot))
 qc.single_state = True
 states_real = np.load('GraduationProject/Data/states_dt{:d}_tot{:.0f}.npy'.format(interval, time_tot), allow_pickle=True)
 state0 = states_real[0]
-print(state0.shape)
-print(states_real.shape)
 states_pred = []
 state_temp = tc.from_numpy(state0).to(device)
 for _ in range(int(time_tot / tau / interval)):
@@ -53,3 +53,19 @@ plt.xlabel('time/s')
 plt.ylabel('mag per site')
 plt.savefig('GraduationProject/pics/1toAll_dt{:d}_tot{:.0f}.svg'.format(interval, time_tot))
 plt.show()
+
+from QC2Mat import *
+from TE2Mat import *
+
+para = dict()
+para['length'] = 10
+para['time_it'] = interval
+para['print_time_it'] = interval
+para['time_tot'] = time_tot
+mat_qc = QC2Mat(para)
+mat_te = TE2Mat(para)
+mat_qc = mat_qc.matmat(np.eye(2**10, dtype=np.complex128))
+mat_te = mat_te.matmat(np.eye(2**10, dtype=np.complex128))
+loss = np.linalg.norm(mat_qc - mat_te)
+print('print_time_it={:d}, time_tot={:.0f}, l2_mat_norm={:.6e}'.format(interval, time_tot, loss))
+# print((mat_qc - mat_qc.T.conj()))
