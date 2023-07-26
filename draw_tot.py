@@ -30,7 +30,7 @@ print(states_real[0].shape)
 state0 = states_real[0]
 qc = tc.load('GraduationProject/Data/qc_dt{:d}_tot{:.0f}.pth'.format(interval, time_tot))
 qc.single_state = True
-time_diff = 10 # 将总时长分为10份
+time_diff = 5 # 将总时长分为10份
 for i in range(time_diff):
     data_real = tc.stack(list(tc.from_numpy(states_real[:int((i + 1)*time_tot/tau/interval/time_diff)])))
     print(data_real.shape)
