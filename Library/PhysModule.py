@@ -112,7 +112,7 @@ def magnetizations(state, which_ops=None):
         num_ops = 1
         which_ops = [which_ops]
     length = state.ndimension()
-    mag = tc.zeros((num_ops, length), dtype=tc.complex64)
+    mag = tc.zeros((num_ops, length), dtype=tc.complex128)
     for n in range(length):
         rho = reduced_density_matrix(state, n)
         for s in range(num_ops):
