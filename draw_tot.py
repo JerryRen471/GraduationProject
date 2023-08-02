@@ -62,18 +62,18 @@ for i in range(time_diff):
     plt.savefig(file_name)
     plt.close()
 
-    # from QC2Mat import *
-    # from TE2Mat import *
+    from QC2Mat import *
+    from TE2Mat import *
 
-    # para = dict()
-    # para['length'] = 10
-    # para['time_it'] = interval
-    # para['print_time_it'] = interval
-    # para['time_tot'] = (i+1)*200
-    # mat_qc = QC2Mat(para)
-    # mat_te = TE2Mat(para)
-    # mat_qc = mat_qc.matmat(np.eye(2**10, dtype=np.complex128))
-    # mat_te = mat_te.matmat(np.eye(2**10, dtype=np.complex128))
-    # loss = np.linalg.norm(mat_qc - mat_te)
-    # print('print_time_it={:d}, time_tot={:.0f}, l2_mat_norm={:.6e}'.format(interval, time_tot/5*(i+1), loss))
-    # print((mat_qc - mat_qc.T.conj()))
+    para = dict()
+    para['length'] = 10
+    para['time_it'] = interval
+    para['print_time_it'] = interval
+    para['time_tot'] = (i+1)*200
+    mat_qc = QC2Mat(para)
+    mat_te = TE2Mat(para)
+    mat_qc = mat_qc.matmat(np.eye(2**10, dtype=np.complex128))
+    mat_te = mat_te.matmat(np.eye(2**10, dtype=np.complex128))
+    loss = np.linalg.norm(mat_qc - mat_te)
+    print('print_time_it={:d}, time_tot={:.0f}, l2_mat_norm={:.6e}'.format(interval, time_tot/5*(i+1), loss))
+    print((mat_qc - mat_qc.T.conj()))

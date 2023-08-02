@@ -8,4 +8,4 @@ source activate myname
 #python程序运行，需在.py文件指定调用GPU，并设置合适的线程数，batch_size大小等
 # python /data/home/scv7454/run/GraduationProject/TimeEvolution.py --pt_it 100 --time 100
 # python /data/home/scv7454/run/GraduationProject/ADQC_tot.py --pt_it 100 --time 100
-python /data/home/scv7454/run/GraduationProject/draw_tot.py --pt_it=10 --time=1000 -s=n
+python /data/home/scv7454/run/GraduationProject/draw_tot.py --pt_it=1000 --time=1000 -s=n
