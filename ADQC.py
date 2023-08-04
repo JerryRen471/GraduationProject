@@ -175,3 +175,5 @@ if __name__ == '__main__':
     # 保存数据
     tc.save(qc, 'GraduationProject/Data/qc_dt{:d}_tot{:.0f}.pth'.format(interval, args.time))
     np.save('GraduationProject/Data/output_adqc_dt{:d}_tot{:.0f}'.format(interval, args.time), output_adqc)
+    np.save('GraduationProject/Data/train_loss_dt{:d}_tot{:.0f}'.format(interval, args.time), results_adqc['train_loss'])
+    np.save('GraduationProject/Data/test_loss_dt{:d}_tot{:.0f}'.format(interval, args.time), results_adqc['test_loss'])
