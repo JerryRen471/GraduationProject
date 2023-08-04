@@ -1,50 +1,45 @@
 import torch as tc
 import numpy as np
+from Library import PhysModule as phy
 from matplotlib import pyplot as plt
 
-def txt2tensor(filename):
-    file = open(filename, mode='r')
-    lines = file.readlines()
-    file.close()
-    for _ in range(len(lines)):
-        lines[_] = float(lines[_][:-1])
-    data = tc.tensor(lines)
-    return data
-
-sample = txt2tensor('D:\\Manual\\Code\\tests\\Graduation Project\\data.txt')
-train_pre = txt2tensor('D:\\Manual\\Code\\tests\\LSTMdata\\train_pre.txt')
-train_loss = txt2tensor('D:\\Manual\\Code\\tests\\LSTMdata\\train_loss.txt')
-test_pre = txt2tensor('D:\\Manual\\Code\\tests\\LSTMdata\\test_pre.txt')
-test_loss = txt2tensor('D:\\Manual\\Code\\tests\\LSTMdata\\test_loss.txt')
-
-# print(sample.shape)
-# print(train_pre.shape)
-# print(test_pre.shape)
-
-x = tc.tensor([_ for _ in range(sample.shape[0])])
-legends = []
-plt.plot(x, sample, label='磁矩真实的时间演化')
-plt.plot(x, tc.cat([train_pre, test_pre], dim=0), label='利用LSTM预测的磁矩随时间演化')
-plt.plot([800, 800], [-0.5, 0.5], linestyle='--')
-xlabel = 't'
-ylabel = 'magnetic moment'
-plt.legend()
-plt.xlabel(xlabel)
-plt.ylabel(ylabel)
-plt.rcParams['font.sans-serif'] = ['SimHei']
-plt.rcParams['axes.unicode_minus'] = False
-
 import argparse
+
 parser = argparse.ArgumentParser(description='manual to this script')
-parser.add_argument('--Jx', type=float, default=0)
-parser.add_argument('--Jy', type=float, default=0)
-parser.add_argument('--Jz', type=float, default=1)
-parser.add_argument('--hx', type=float, default=0.5)
-
+parser.add_argument('--time', type=float, default=100)
+parser.add_argument('--pt_it', type=int, default=10)
 args = parser.parse_args()
-J = [args.Jx, args.Jy, args.Jz]
-hx = args.hx
+interval = args.pt_it
 
-plt.title('t={}, V={}, tot_train_loss={:.4e}, tot_test_loss={:.4e}'.format(t, V, tc.sum(train_loss).item(), tc.sum(test_loss).item()))
+def mag_from_states(states):
+    spin = phy.spin_operators('half', device='cpu')
+    mag_z = list()
+    for _ in range(states.shape[0]):
+        mag_z.append(phy.magnetizations(states[_], [spin['sz']]))
+    mag_z = tc.cat(mag_z, dim=0)
+    mag_z_tot = mag_z.sum(dim=1) / mag_z.shape[1] # 不同时刻链的z方向总磁矩对链长做平均
+    return mag_z_tot
 
-plt.savefig('D:\\Manual\\Code\\tests\\Graduation Project\\pics\\l_18_J_{}_hx_{}.png'.format(J, hx), dpi=300)
+# 导入数据
+states_pred = np.load('GraduationProject/Data/output_adqc_dt{:d}.npy'.format(interval), allow_pickle=True)
+print(states_pred[0].shape)
+data_pred = tc.stack(list(tc.from_numpy(states_pred)))
+print(data_pred.shape)
+
+states_real = np.load('GraduationProject/Data/states_dt{:d}.npy'.format(interval), allow_pickle=True)
+print(states_real[0].shape)
+data_real = tc.stack(list(tc.from_numpy(states_real)))
+print(data_real.shape)
+
+mag_z_real_tot = mag_from_states(data_real)
+mag_z_pred_tot = mag_from_states(data_pred)
+x = tc.arange(0, mag_z_pred_tot.shape[0]) * 0.1
+
+legends = []
+plt.plot(x, mag_z_real_tot, label='real mag')
+plt.plot(x, mag_z_pred_tot, label='predicted mag')
+plt.legend()
+plt.xlabel('time/s')
+plt.ylabel('mag per site')
+plt.savefig('GraduationProject/pics/magz_dt{}.svg'.format(interval))
+plt.show()
