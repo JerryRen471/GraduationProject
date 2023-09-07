@@ -5,7 +5,7 @@ from matplotlib import pyplot as plt
 
 import argparse
 parser = argparse.ArgumentParser(description='manual to this script')
-parser.add_argument('--seed', type=int, default=100)
+# parser.add_argument('--seed', type=int, default=100)
 parser.add_argument('--folder', type=str, default='rand_init/')
 parser.add_argument('--train_num', type=int, default=100)
 args = parser.parse_args()
