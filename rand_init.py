@@ -100,51 +100,52 @@ def rand_states(number:int, length:int, device=tc.device('cuda:0'))->tc.Tensor:
     states = states.reshape(shape_)
     return states
 
-length = 10
-spin = 'half'
-d = phy.from_spin2phys_dim(spin)
-device = tc.device('cuda:0')
-dtype = tc.complex128
-seed = 100
+if __name__ == 'main':
+    length = 10
+    spin = 'half'
+    d = phy.from_spin2phys_dim(spin)
+    device = tc.device('cuda:0')
+    dtype = tc.complex128
+    seed = 100
 
-import argparse
-parser = argparse.ArgumentParser(description='manual to this script')
-parser.add_argument('--n', type=int, default=3)
-parser.add_argument('--Jx', type=float, default=1)
-parser.add_argument('--Jy', type=float, default=0)
-parser.add_argument('--Jz', type=float, default=1)
-parser.add_argument('--hx', type=float, default=0.5)
-parser.add_argument('--hl', type=float, default=2)
-parser.add_argument('--seed', type=int, default=None)
-parser.add_argument('--train_num', type=int, default=100)
-parser.add_argument('--folder', type=str, default='rand_init/')
-args = parser.parse_args()
+    import argparse
+    parser = argparse.ArgumentParser(description='manual to this script')
+    parser.add_argument('--n', type=int, default=3)
+    parser.add_argument('--Jx', type=float, default=1)
+    parser.add_argument('--Jy', type=float, default=0)
+    parser.add_argument('--Jz', type=float, default=1)
+    parser.add_argument('--hx', type=float, default=0.5)
+    parser.add_argument('--hl', type=float, default=2)
+    parser.add_argument('--seed', type=int, default=None)
+    parser.add_argument('--train_num', type=int, default=100)
+    parser.add_argument('--folder', type=str, default='rand_init/')
+    args = parser.parse_args()
 
-para = dict()
-para['length'] = length
-para['spin'] = 'half'
-para['d'] = d
-para['device'] = device
-para['dtype'] = dtype
-para['J'] = [args.Jx, args.Jy, args.Jz]
-para['h'] = [args.hx, 0, 0]
-para['time_tot'] = 0.01
-para['print_time_it'] = 1
-para['hl'] = args.hl
-para['folder'] = args.folder
-para['seed'] = args.seed
+    para = dict()
+    para['length'] = length
+    para['spin'] = 'half'
+    para['d'] = d
+    para['device'] = device
+    para['dtype'] = dtype
+    para['J'] = [args.Jx, args.Jy, args.Jz]
+    para['h'] = [args.hx, 0, 0]
+    para['time_tot'] = 0.01
+    para['print_time_it'] = 1
+    para['hl'] = args.hl
+    para['folder'] = args.folder
+    para['seed'] = args.seed
 
-if para['seed'] != None:
-    tc.manual_seed(para['seed'])
-trainset = rand_states(args.train_num, length, device=para['device'])
-print(trainset.dtype)
-train_lbs = Heisenberg_mul_states_evl(trainset, para)
-testset = rand_states(0.2 * args.train_num, length, device=para['device'])
-test_lbs = Heisenberg_mul_states_evl(testset, para)
-data = dict()
-data['train_set'] = trainset
-data['train_lbs'] = train_lbs
-data['test_set'] = testset
-data['test_lbs'] = test_lbs
+    if para['seed'] != None:
+        tc.manual_seed(para['seed'])
+    trainset = rand_states(args.train_num, length, device=para['device'])
+    print(trainset.dtype)
+    train_lbs = Heisenberg_mul_states_evl(trainset, para)
+    testset = rand_states(0.2 * args.train_num, length, device=para['device'])
+    test_lbs = Heisenberg_mul_states_evl(testset, para)
+    data = dict()
+    data['train_set'] = trainset
+    data['train_lbs'] = train_lbs
+    data['test_set'] = testset
+    data['test_lbs'] = test_lbs
 
-np.save('GraduationProject/Data/'+para['folder']+'data_num{:d}'.format(args.train_num), data)
+    np.save('GraduationProject/Data/'+para['folder']+'data_num{:d}'.format(args.train_num), data)
