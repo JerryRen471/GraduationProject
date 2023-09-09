@@ -114,17 +114,17 @@ def rand_dir_prod_states(number:int, length:int, device=tc.device('cuda:0'))->tc
     states = states.reshape(shape_)
     return states
 
-def gen_select(gen_type:str)->function:
+def gen_select(gen_type:str):
     if gen_type == 'd':
         gen = rand_dir_prod_states
-    elif gen_type == 'n':
-        gen = rand_states
     else:
-        gen = None
-        print('-'*10+'\nArgument --gen_type must be the combination of \'n\' and \'d\'!\n'+'-'*10)
+        gen = rand_states
+    # else:
+    #     gen = None
+    #     print('-'*10+'\nArgument --gen_type must be the combination of \'n\' and \'d\'!\n'+'-'*10)
     return gen
 
-if __name__ == 'main':
+if __name__ == '__main__':
     length = 10
     spin = 'half'
     d = phy.from_spin2phys_dim(spin)

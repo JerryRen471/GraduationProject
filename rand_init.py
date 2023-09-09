@@ -100,7 +100,7 @@ def rand_states(number:int, length:int, device=tc.device('cuda:0'))->tc.Tensor:
     states = states.reshape(shape_)
     return states
 
-if __name__ == 'main':
+if __name__ == '__main__':
     length = 10
     spin = 'half'
     d = phy.from_spin2phys_dim(spin)
