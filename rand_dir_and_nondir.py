@@ -169,7 +169,7 @@ if __name__ == '__main__':
     train_lbs = Heisenberg_mul_states_evl(trainset, para)
 
     gen_test = gen_select(args.gen_type[1])
-    testset = rand_states(args.test_num, length, device=para['device'])
+    testset = gen_test(args.test_num, length, device=para['device'])
     test_lbs = Heisenberg_mul_states_evl(testset, para)
     data = dict()
     data['train_set'] = trainset
