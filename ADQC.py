@@ -28,7 +28,7 @@ def fidelity(psi1, psi0):
         x_pos = list(range(len(psi1_.shape)))
         y_pos = x_pos
         f_ = bf.tmul(psi1_.conj(), psi0_, x_pos, y_pos)
-        f += tc.sqrt((f_*f_.conj()).real)
+        f += (f_*f_.conj()).real
     f = f/psi1.shape[0]
     return f
 
