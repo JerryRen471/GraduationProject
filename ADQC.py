@@ -34,7 +34,7 @@ def fidelity(psi1, psi0):
 
 def loss_mag(psi1, psi0):
     mag_diff = mag_from_states(psi1, device=psi1.device) - mag_from_states(psi0, device=psi0.device)
-    loss = tc.norm(mag_diff)
+    loss = tc.norm(mag_diff)/psi1.shape[0]
     return loss
 
 def ADQC(para=None):
