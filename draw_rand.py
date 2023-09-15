@@ -18,6 +18,9 @@ test_loss = results['test_loss']
 x = list(range(0, len(train_loss)))
 
 print('train_num={:d}\ntrain_loss:{:.4e}\ttest_loss:{:.4e}\n'.format(train_num, train_loss[-1], test_loss[-1]))
+# 打开一个文件，如果不存在则创建，如果存在则追加内容
+with open('GraduationProject/Data/'+args.folder+'fin_loss_train_num.txt', 'a') as f:
+    f.write('train_num={:d}\ntrain_loss:{:.4e}\ttest_loss:{:.4e}\n'.format(train_num, train_loss[-1], test_loss[-1]))
 
 legends = []
 plt.plot(x, train_loss, label='train loss')
