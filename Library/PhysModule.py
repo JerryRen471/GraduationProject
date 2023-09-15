@@ -102,7 +102,7 @@ def reduced_density_matrix(state, pos):
     return rho.reshape(dim, dim)
 
 
-def magnetizations(state, which_ops=None):
+def magnetizations(state:tc.Tensor, which_ops=None)->tc.Tensor:
     if which_ops is None:
         op = spin_operators('half', if_list=True, device=state.device)
         which_ops = [op['sx'], op['sy'], op['sz']]
@@ -120,6 +120,17 @@ def magnetizations(state, which_ops=None):
             # print(which_ops[s])
             mag[s, n] = tc.einsum('ab,ba->', rho.type(tc.complex64), which_ops[s].type(tc.complex64))
     return mag
+
+
+def mag_from_states(states, device='cpu'):
+    spin = spin_operators('half', device=device)
+    mag_z = list()
+    for _ in range(states.shape[0]):
+        mag_z.append(magnetizations(states[_], [spin['sz']]))
+    mag_z = tc.cat(mag_z, dim=0)
+    mag_z_tot = mag_z.sum(dim=1) / mag_z.shape[1] # 不同时刻链的z方向总磁矩对链长做平均
+    return mag_z_tot
+
 
 def combined_mag(state, which_ops=None):
     if which_ops is None:
