@@ -118,8 +118,8 @@ def time_evolution_Heisenberg_chain(para=None, state=None, save=True):
     states = list()
     for t in range(para['time_it']):
         if (t % para['print_time_it']) == 0:
-            norm = tc.sqrt(tc.dot(state.reshape(-1, ), state.reshape(-1, ).conj()).real)
-            state = state / norm
+            norm = tc.sqrt(tc.dot(state.reshape(-1, ), state.reshape(-1, ).conj()).real) # 修改
+            state = state / norm # 修改
             states.append(state.cpu())
             mag_z.append(phy.magnetizations(state, [spin['sz']])) # 计算链上每个格点的z方向磁矩
             energies = phy.bond_energies(state, [hamilt.reshape([para['d']] * 4),
@@ -144,8 +144,8 @@ def time_evolution_Heisenberg_chain(para=None, state=None, save=True):
         pf.plot(print_field, mag_z_tot)
         pf.plot(print_field, eg)
         pf.plot(print_field, ent)
-        bf.output_txt(mag_z_tot, filename='GraduationProject/Data/mag_z_dt{:d}.txt'.format(para['print_time_it']))
-        np.save('GraduationProject/Data/states_dt{:d}_tot{:.0f}'.format(para['print_time_it'], para['time_tot']), tc.stack(states))
+        bf.output_txt(mag_z_tot, filename='GraduationProject/Data/'+para['folder']+'mag_z_dt{:d}.txt'.format(para['print_time_it']))
+        np.save('GraduationProject/Data/'+para['folder']+'states_dt{:d}_tot{:.0f}'.format(para['print_time_it'], para['time_tot']), tc.stack(states))
     return state
 
 if __name__ == '__main__':
@@ -167,6 +167,7 @@ if __name__ == '__main__':
     parser.add_argument('--hl', type=float, default=2)
     parser.add_argument('--time', type=float, default=100)
     parser.add_argument('--pt_it', type=int, default=10)
+    parser.add_argument('--folder', type=str, default='')
     args = parser.parse_args()
     n = args.n
     loc = 2 ** int(length-n) - 1
@@ -182,6 +183,7 @@ if __name__ == '__main__':
     para['time_tot'] = args.time
     para['print_time_it'] = args.pt_it
     para['hl'] = args.hl
+    para['folder'] = args.folder
 
     state = tc.zeros((d ** length, ), device=device, dtype=dtype)
     state[loc] = 1.0

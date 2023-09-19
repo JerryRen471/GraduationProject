@@ -28,7 +28,7 @@ def fidelity(psi1, psi0):
         x_pos = list(range(len(psi1_.shape)))
         y_pos = x_pos
         f_ = bf.tmul(psi1_.conj(), psi0_, x_pos, y_pos)
-        f += tc.sqrt((f_*f_.conj()).real)
+        f += (f_*f_.conj()).real
     f = f/psi1.shape[0]
     return f
 
@@ -59,7 +59,11 @@ def ADQC(para=None):
     qc.single_state = False  # 切换至多个态演化模式
     return qc
 
-def train(qc, data, para):
+def train(qc:ADQC_LatentGates, data:dict, para:dict):
+    """用data按照para的设定对qc进行训练
+
+    返回的results是字典, 包含'train_pred', 'test_pred', 'train_loss', 'test_loss'
+    """
     para0 = dict()  # 默认参数
     para0['test_ratio'] = 0.2  # 将部分样本划为测试集
     para0['length_in'] = 10  # 数据样本维数
@@ -81,11 +85,15 @@ def train(qc, data, para):
 
     optimizer = Adam(qc.parameters(), lr=para['lr'])
 
-    num_train = int(data.shape[0] * (1-para['test_ratio']))
-    trainset, train_lbs = split_time_series(
-        data[:num_train], para['length'], para['device'], para['dtype'])
-    testset, test_lbs = split_time_series(
-        data[num_train-para['length']:], para['length'], para['device'], para['dtype'])
+    # num_train = int(data.shape[0] * (1-para['test_ratio']))
+    trainset = data['train_set']
+    train_lbs = data['train_lbs']
+    testset = data['test_set']
+    test_lbs = data['test_lbs']
+    # trainset, train_lbs = split_time_series(
+    #     data[:num_train], para['length'], para['device'], para['dtype'])
+    # testset, test_lbs = split_time_series(
+    #     data[num_train-para['length']:], para['length'], para['device'], para['dtype'])
     trainloader = DataLoader(TensorDataset(trainset, train_lbs), batch_size=para['batch_size'], shuffle=False)
     testloader = DataLoader(TensorDataset(testset, test_lbs), batch_size=para['batch_size'], shuffle=False)
 
@@ -121,12 +129,12 @@ def train(qc, data, para):
         psi0 = trainset
         psi1 = qc(psi0)
         output = psi1
-        output = tc.cat([data[:para['length']].to(dtype=output.dtype), output.to(device=data.device)], dim=0)
-        results['train_pred'] = output.data
+        output = output.data.to(device=data['train_set'].device)
+        results['train_pred'] = output
         psi0 = testset
         psi1 = qc(psi0)
         output1 = psi1
-        output1 = output1.data.to(device=data.device)
+        output1 = output1.data.to(device=data['test_set'].device)
         results['test_pred'] = output1
         results['train_loss'] = loss_train_rec
         results['test_loss'] = loss_test_rec
@@ -154,15 +162,27 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='manual to this script')
     parser.add_argument('--time', type=float, default=1000)
     parser.add_argument('--pt_it', type=int, default=1000)
+    parser.add_argument('--folder', type=str, default='')
     args = parser.parse_args()
     interval = args.pt_it
+    folder = args.folder
 
     # 导入数据
-    states = np.load('GraduationProject/Data/states_dt{:d}_tot{:.0f}.npy'.format(interval, args.time), allow_pickle=True)
+    states = np.load('GraduationProject/Data/'+folder+'states_dt{:d}_tot{:.0f}.npy'.format(interval, args.time), allow_pickle=True)
     print(states[0].shape)
     data_list = []
     data = tc.stack(list(tc.from_numpy(states)))
     print(data.shape)
+    num_train = int(data.shape[0] * (1-para['test_ratio']))
+    trainset, train_lbs = split_time_series(
+        data[:num_train], para['length'], para['device'], para['dtype'])
+    testset, test_lbs = split_time_series(
+        data[num_train-para['length']:], para['length'], para['device'], para['dtype'])
+    data = dict()
+    data['train_set'] = trainset
+    data['train_lbs'] = train_lbs
+    data['test_set'] = testset
+    data['test_lbs'] = test_lbs
 
     # 训练ADQC实现预测
     # trainloader, testloader = DataProcess(data, para_adqc)
@@ -173,7 +193,7 @@ if __name__ == '__main__':
                         results_adqc['test_pred']], dim=0)
 
     # 保存数据
-    tc.save(qc, 'GraduationProject/Data/qc_dt{:d}_tot{:.0f}.pth'.format(interval, args.time))
-    np.save('GraduationProject/Data/output_adqc_dt{:d}_tot{:.0f}'.format(interval, args.time), output_adqc)
-    np.save('GraduationProject/Data/train_loss_dt{:d}_tot{:.0f}'.format(interval, args.time), results_adqc['train_loss'])
-    np.save('GraduationProject/Data/test_loss_dt{:d}_tot{:.0f}'.format(interval, args.time), results_adqc['test_loss'])
+    tc.save(qc, 'GraduationProject/Data/'+folder+'qc_dt{:d}_tot{:.0f}.pth'.format(interval, args.time))
+    np.save('GraduationProject/Data/'+folder+'output_adqc_dt{:d}_tot{:.0f}'.format(interval, args.time), output_adqc)
+    np.save('GraduationProject/Data/'+folder+'train_loss_dt{:d}_tot{:.0f}'.format(interval, args.time), results_adqc['train_loss'])
+    np.save('GraduationProject/Data/'+folder+'test_loss_dt{:d}_tot{:.0f}'.format(interval, args.time), results_adqc['test_loss'])
