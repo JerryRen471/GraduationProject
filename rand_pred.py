@@ -17,7 +17,7 @@ para = {'lr': 1e-2,  # 初始学习率
         'device': choose_device()}  # 计算设备（cuda优先）
 
 # ADQC参数
-para_adqc = {'depth': 4}  # ADQC量子门层数
+para_adqc = {'depth': 4, 'loss_type': 'mag'}  # ADQC量子门层数
 
 para_adqc = dict(para, **para_adqc)
 
@@ -27,9 +27,11 @@ parser = argparse.ArgumentParser(description='manual to this script')
 # parser.add_argument('--seed', type=int, default=None)
 parser.add_argument('--folder', type=str, default='rand_init/')
 parser.add_argument('--train_num', type=int, default=100)
+parser.add_argument('--loss_type', type=str, default='fidelity')
 args = parser.parse_args()
 # para_adqc['folder'] = args.folder
 # para_adqc['seed'] = args.seed
+para_adqc['loss_type'] = args.loss_type
 
 data = np.load('GraduationProject/Data/'+args.folder+'data_num{:d}.npy'.format(args.train_num), allow_pickle=True)
 data = data.item()
