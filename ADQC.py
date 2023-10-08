@@ -32,9 +32,21 @@ def fidelity(psi1, psi0):
     f = f/psi1.shape[0]
     return f
 
+def loss_fid(psi1, psi0):
+    return 1 - fidelity(psi1, psi0)
+
 def loss_mag(psi1, psi0):
     mag_diff = mag_from_states(psi1, device=psi1.device) - mag_from_states(psi0, device=psi0.device)
     loss = tc.norm(mag_diff)/psi1.shape[0]
+    return loss
+
+def choose_loss(loss_type):
+    if loss_type == 'fidelity':
+        loss = loss_fid
+    elif loss_type == 'mag':
+        loss = loss_mag
+    else:
+        raise ValueError("the loss_type should be ")
     return loss
 
 def ADQC(para=None):
@@ -105,12 +117,15 @@ def train(qc:ADQC_LatentGates, data:dict, para:dict):
     loss_train_rec = list()
     loss_test_rec = list()
 
+    loss_fun = choose_loss(para['loss_type'])
+
     for t in range(para['it_time']):
         loss_tmp = 0.0
         for n, (samples, lbs) in enumerate(trainloader):
             psi0 = samples
             psi1 = qc(psi0)
-            loss = loss_mag(psi1, lbs)
+            
+            loss = loss_fun(psi1, lbs)
             loss.backward()
             optimizer.step()
             optimizer.zero_grad()
@@ -123,7 +138,7 @@ def train(qc:ADQC_LatentGates, data:dict, para:dict):
                 for n, (samples, lbs) in enumerate(testloader):
                     psi0 = samples
                     psi1 = qc(psi0)
-                    loss = 1 - fidelity(psi1, lbs)
+                    loss = loss_fun(psi1, lbs)
                     loss_tmp += loss.item() * samples.shape[0]
             loss_test_rec.append(1e-4 * loss_tmp / para0['test_ratio'])
             print('Epoch %i: train loss %g, test loss %g' %
@@ -158,7 +173,7 @@ if __name__ == '__main__':
             'device': choose_device()}  # 计算设备（cuda优先）
 
     # ADQC参数
-    para_adqc = {'depth': 4}  # ADQC量子门层数
+    para_adqc = {'depth': 4, 'loss_type':'mag'}  # ADQC量子门层数
 
     para_adqc = dict(para, **para_adqc)
 
