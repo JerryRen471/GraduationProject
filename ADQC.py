@@ -8,7 +8,7 @@ from torch.optim import Adam
 from matplotlib import pyplot as plt
 from Library.BasicFun import choose_device
 from Library.MathFun import series_sin_cos
-from Algorithms import ADQC_algo, LSTM_algo
+from Library.PhysModule import mag_from_states
 
 from Library.ADQC import ADQC_LatentGates
 
@@ -31,6 +31,23 @@ def fidelity(psi1, psi0):
         f += (f_*f_.conj()).real
     f = f/psi1.shape[0]
     return f
+
+def loss_fid(psi1, psi0):
+    return 1 - fidelity(psi1, psi0)
+
+def loss_mag(psi1, psi0):
+    mag_diff = mag_from_states(psi1, device=psi1.device) - mag_from_states(psi0, device=psi0.device)
+    loss = tc.norm(mag_diff)/psi1.shape[0]
+    return loss
+
+def choose_loss(loss_type):
+    if loss_type == 'fidelity':
+        loss = loss_fid
+    elif loss_type == 'mag':
+        loss = loss_mag
+    else:
+        raise ValueError("the loss_type should be ")
+    return loss
 
 def ADQC(para=None):
     para0 = dict()  # 默认参数
@@ -100,12 +117,15 @@ def train(qc:ADQC_LatentGates, data:dict, para:dict):
     loss_train_rec = list()
     loss_test_rec = list()
 
+    loss_fun = choose_loss(para['loss_type'])
+
     for t in range(para['it_time']):
         loss_tmp = 0.0
         for n, (samples, lbs) in enumerate(trainloader):
             psi0 = samples
             psi1 = qc(psi0)
-            loss = 1 - fidelity(psi1, lbs)
+            
+            loss = loss_fun(psi1, lbs)
             loss.backward()
             optimizer.step()
             optimizer.zero_grad()
@@ -118,7 +138,7 @@ def train(qc:ADQC_LatentGates, data:dict, para:dict):
                 for n, (samples, lbs) in enumerate(testloader):
                     psi0 = samples
                     psi1 = qc(psi0)
-                    loss = 1 - fidelity(psi1, lbs)
+                    loss = loss_fun(psi1, lbs)
                     loss_tmp += loss.item() * samples.shape[0]
             loss_test_rec.append(1e-4 * loss_tmp / para0['test_ratio'])
             print('Epoch %i: train loss %g, test loss %g' %
@@ -153,7 +173,7 @@ if __name__ == '__main__':
             'device': choose_device()}  # 计算设备（cuda优先）
 
     # ADQC参数
-    para_adqc = {'depth': 4}  # ADQC量子门层数
+    para_adqc = {'depth': 4, 'loss_type':'mag'}  # ADQC量子门层数
 
     para_adqc = dict(para, **para_adqc)
 
@@ -168,32 +188,13 @@ if __name__ == '__main__':
     folder = args.folder
 
     # 导入数据
-    states = np.load('GraduationProject/Data/'+folder+'states_dt{:d}_tot{:.0f}.npy'.format(interval, args.time), allow_pickle=True)
-    print(states[0].shape)
-    data_list = []
-    data = tc.stack(list(tc.from_numpy(states)))
-    print(data.shape)
-    num_train = int(data.shape[0] * (1-para['test_ratio']))
-    trainset, train_lbs = split_time_series(
-        data[:num_train], para['length'], para['device'], para['dtype'])
-    testset, test_lbs = split_time_series(
-        data[num_train-para['length']:], para['length'], para['device'], para['dtype'])
-    data = dict()
-    data['train_set'] = trainset
-    data['train_lbs'] = train_lbs
-    data['test_set'] = testset
-    data['test_lbs'] = test_lbs
+    data = np.load("/data/home/scv7454/run/GraduationProject/Data/mag_loss/data_num100.npy", allow_pickle=True)
+    data = data.item()
 
     # 训练ADQC实现预测
     # trainloader, testloader = DataProcess(data, para_adqc)
     qc = ADQC(para_adqc)
-    qc, results_adqc, para_adqc = \
-        train(qc, data, para_adqc)
-    output_adqc = tc.cat([results_adqc['train_pred'],
-                        results_adqc['test_pred']], dim=0)
+    qc, results_adqc, para_adqc = train(qc, data, para_adqc)
 
     # 保存数据
-    tc.save(qc, 'GraduationProject/Data/'+folder+'qc_dt{:d}_tot{:.0f}.pth'.format(interval, args.time))
-    np.save('GraduationProject/Data/'+folder+'output_adqc_dt{:d}_tot{:.0f}'.format(interval, args.time), output_adqc)
-    np.save('GraduationProject/Data/'+folder+'train_loss_dt{:d}_tot{:.0f}'.format(interval, args.time), results_adqc['train_loss'])
-    np.save('GraduationProject/Data/'+folder+'test_loss_dt{:d}_tot{:.0f}'.format(interval, args.time), results_adqc['test_loss'])
+    np.save("/data/home/scv7454/run/GraduationProject/Data/mag_loss/adqc_result_num100", results_adqc)
