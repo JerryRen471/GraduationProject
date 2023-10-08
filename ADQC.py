@@ -20,7 +20,7 @@ def split_time_series(data, length, device=None, dtype=tc.float32):
         targets.append(data[n].clone())
     return tc.cat(samples, dim=0).to(device=device, dtype=dtype), tc.stack(targets, dim=0).to(device=device, dtype=dtype)
 
-def fidelity(psi1, psi0):
+def fidelity(psi1:tc.Tensor, psi0:tc.Tensor):
     f = 0
     for i in range(psi1.shape[0]):
         psi0_ = psi0[i]
@@ -32,21 +32,21 @@ def fidelity(psi1, psi0):
     f = f/psi1.shape[0]
     return f
 
-def loss_fid(psi1, psi0):
+def loss_fid(psi1:tc.Tensor, psi0:tc.Tensor):
     return 1 - fidelity(psi1, psi0)
 
-def loss_mag(psi1, psi0):
+def loss_mag(psi1:tc.Tensor, psi0:tc.Tensor):
     mag_diff = mag_from_states(psi1, device=psi1.device) - mag_from_states(psi0, device=psi0.device)
     loss = tc.norm(mag_diff)/psi1.shape[0]
     return loss
 
-def choose_loss(loss_type):
+def choose_loss(loss_type:str):
     if loss_type == 'fidelity':
         loss = loss_fid
     elif loss_type == 'mag':
         loss = loss_mag
     else:
-        raise ValueError("the loss_type should be ")
+        raise ValueError("the loss_type should be \'fidelity\' or \'mag\'")
     return loss
 
 def ADQC(para=None):
