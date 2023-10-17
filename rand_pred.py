@@ -17,7 +17,7 @@ para = {'lr': 1e-2,  # 初始学习率
         'device': choose_device()}  # 计算设备（cuda优先）
 
 # ADQC参数
-para_adqc = {'depth': 4, 'loss_type': 'mag'}  # ADQC量子门层数
+para_adqc = {'depth': 4, 'loss_type': 'multi_mag'}  # ADQC量子门层数，损失函数类型
 
 para_adqc = dict(para, **para_adqc)
 

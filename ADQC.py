@@ -8,7 +8,7 @@ from torch.optim import Adam
 from matplotlib import pyplot as plt
 from Library.BasicFun import choose_device
 from Library.MathFun import series_sin_cos
-from Library.PhysModule import mag_from_states
+from Library.PhysModule import mag_from_states, multi_mag_from_states
 
 from Library.ADQC import ADQC_LatentGates
 
@@ -40,13 +40,20 @@ def loss_mag(psi1:tc.Tensor, psi0:tc.Tensor):
     loss = tc.norm(mag_diff)/psi1.shape[0]
     return loss
 
+def loss_multi_mag(psi1:tc.Tensor, psi0:tc.Tensor):
+    multi_mag_diff = multi_mag_from_states(psi1, device=psi1.device) - multi_mag_from_states(psi0, device=psi0.device)
+    loss = tc.norm(multi_mag_diff)/psi0.shape[1]/psi0.shape[0]
+    return loss
+
 def choose_loss(loss_type:str):
     if loss_type == 'fidelity':
         loss = loss_fid
     elif loss_type == 'mag':
         loss = loss_mag
+    elif loss_type == 'multi_mag':
+        loss = loss_multi_mag
     else:
-        raise ValueError("the loss_type should be \'fidelity\' or \'mag\'")
+        raise ValueError("the loss_type should be \'fidelity\' or \'mag\' or \'multi_mag\'")
     return loss
 
 def ADQC(para=None):
