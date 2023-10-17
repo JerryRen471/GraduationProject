@@ -121,13 +121,16 @@ def magnetizations(state:tc.Tensor, which_ops=None)->tc.Tensor:
             mag[s, n] = tc.einsum('ab,ba->', rho.type(tc.complex64), which_ops[s].type(tc.complex64))
     return mag
 
-
-def mag_from_states(states, device='cpu'):
+def multi_mag_from_states(states, device='cpu'):
     spin = spin_operators('half', device=device)
     mag_z = list()
     for _ in range(states.shape[0]):
         mag_z.append(magnetizations(states[_], [spin['sz']]))
     mag_z = tc.cat(mag_z, dim=0)
+    return mag_z
+
+def mag_from_states(states, device='cpu'):
+    mag_z = multi_mag_from_states(states=states, device=device)
     mag_z_tot = mag_z.sum(dim=1) / mag_z.shape[1] # 不同时刻链的z方向总磁矩对链长做平均
     return mag_z_tot
 
