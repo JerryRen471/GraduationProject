@@ -123,33 +123,44 @@ def train(qc:ADQC_LatentGates, data:dict, para:dict):
 
     loss_train_rec = list()
     loss_test_rec = list()
+    train_fide = list()
+    test_fide = list()
 
     loss_fun = choose_loss(para['loss_type'])
 
     for t in range(para['it_time']):
         loss_tmp = 0.0
+        train_fide_tmp = 0.0
+        train_batches = 0
+        test_batches = 0
         for n, (samples, lbs) in enumerate(trainloader):
             psi0 = samples
             psi1 = qc(psi0)
-            
             loss = loss_fun(psi1, lbs)
             loss.backward()
             optimizer.step()
             optimizer.zero_grad()
-            loss_tmp += loss.item() * samples.shape[0]
+            loss_tmp += loss.item()
+            train_fide_tmp += fidelity(psi1, lbs)
+            train_batches += 1
 
         if (t+1) % para['print_time'] == 0:
-            loss_train_rec.append(1e-4 * loss_tmp / (1-para0['test_ratio']))
+            loss_train_rec.append(loss_tmp / train_batches)
+            train_fide.append(train_fide_tmp.cpu().detach().numpy() / train_batches)
             loss_tmp = 0.0
+            test_fide_tmp = 0.0
             with tc.no_grad():
                 for n, (samples, lbs) in enumerate(testloader):
                     psi0 = samples
                     psi1 = qc(psi0)
                     loss = loss_fun(psi1, lbs)
-                    loss_tmp += loss.item() * samples.shape[0]
-            loss_test_rec.append(1e-4 * loss_tmp / para0['test_ratio'])
-            print('Epoch %i: train loss %g, test loss %g' %
-                (t+1, loss_train_rec[-1], loss_test_rec[-1]))
+                    loss_tmp += loss.item()
+                    test_fide_tmp += fidelity(psi1, lbs)
+                    test_batches += 1
+            loss_test_rec.append(loss_tmp / test_batches)
+            test_fide.append(test_fide_tmp.cpu().detach().numpy() / test_batches)
+            print('Epoch %i: train loss %g, test loss %g; train fidelity %g, test fidelity %g' %
+                (t+1, loss_train_rec[-1], loss_test_rec[-1], train_fide[-1], test_fide[-1]))
 
     with tc.no_grad():
         results = dict()
@@ -165,6 +176,8 @@ def train(qc:ADQC_LatentGates, data:dict, para:dict):
         results['test_pred'] = output1
         results['train_loss'] = loss_train_rec
         results['test_loss'] = loss_test_rec
+        results['train_fide'] = train_fide
+        results['test_fide'] = test_fide
     return qc, results, para
 
 if __name__ == '__main__':
