@@ -192,3 +192,14 @@ def entanglement_entropy(lm):
     else:
         return np.inner(-1 * lm1, np.log(lm1))
 
+def fidelity(psi1:tc.Tensor, psi0:tc.Tensor):
+    f = 0
+    for i in range(psi1.shape[0]):
+        psi0_ = psi0[i]
+        psi1_ = psi1[i]
+        x_pos = list(range(len(psi1_.shape)))
+        y_pos = x_pos
+        f_ = bf.tmul(psi1_.conj(), psi0_, x_pos, y_pos)
+        f += (f_*f_.conj()).real
+    f = f/psi1.shape[0]
+    return f
