@@ -94,7 +94,7 @@ def rand_states(number:int, length:int, device=tc.device('cuda:0'))->tc.Tensor:
     number = int(number)
     shape = [number, 2 ** length]
     states = tc.rand(shape, dtype=tc.complex128, device=device)
-    shape_ = [number] + [2]*10
+    shape_ = [number] + [2]*length
     norm = tc.sum(states * states.conj(), dim=1, keepdim=True)
     states = states / tc.sqrt(norm)
     states = states.reshape(shape_)
