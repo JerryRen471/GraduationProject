@@ -1,6 +1,6 @@
 import torch as tc
 import numpy as np
-from GraduationProject.Library.BasicFun import mkdir
+from Library.BasicFun import mkdir
 from Library import PhysModule as phy
 from matplotlib import pyplot as plt
 
