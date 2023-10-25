@@ -1,5 +1,6 @@
 import torch as tc
 import numpy as np
+from GraduationProject.Library.BasicFun import mkdir
 from Library import BasicFun as bf
 from Library import PhysModule as phy
 import random
@@ -177,4 +178,6 @@ if __name__ == '__main__':
     data['test_set'] = testset
     data['test_lbs'] = test_lbs
 
-    np.save('GraduationProject/Data/'+para['folder']+'data_num{:d}'.format(args.train_num), data)
+    path = 'GraduationProject/Data'+para['folder']
+    mkdir(path)
+    np.save(path+'/data_num{:d}'.format(args.train_num), data)

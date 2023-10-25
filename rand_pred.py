@@ -3,7 +3,7 @@ import torch as tc
 import numpy as np
 from Library import BasicFun as bf
 from Library import PhysModule as phy
-from Library.BasicFun import choose_device
+from Library.BasicFun import choose_device, mkdir
 from torch.utils.data import DataLoader, TensorDataset
 
 # 通用参数
@@ -32,12 +32,13 @@ args = parser.parse_args()
 # para_adqc['folder'] = args.folder
 # para_adqc['seed'] = args.seed
 para_adqc['loss_type'] = args.loss_type
-
-data = np.load('GraduationProject/Data/'+args.folder+'data_num{:d}.npy'.format(args.train_num), allow_pickle=True)
+path = 'GraduationProject/Data'+args.folder
+mkdir(path)
+data = np.load(path+'/data_num{:d}.npy'.format(args.train_num), allow_pickle=True)
 data = data.item()
 
 print(data['train_set'].dtype)
 
 qc = ADQC.ADQC(para_adqc)
 qc, results_adqc, para_adqc = ADQC.train(qc, data, para_adqc)
-np.save('GraduationProject/Data/'+args.folder+'adqc_result_num{:d}'.format(args.train_num), results_adqc)
+np.save(path+'/adqc_result_num{:d}'.format(args.train_num), results_adqc)
