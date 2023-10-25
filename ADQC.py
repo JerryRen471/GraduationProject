@@ -8,7 +8,7 @@ from torch.optim import Adam
 from matplotlib import pyplot as plt
 from Library.BasicFun import choose_device
 from Library.MathFun import series_sin_cos
-from Library.PhysModule import mag_from_states, multi_mag_from_states
+from Library.PhysModule import mag_from_states, mags_from_states, multi_mags_from_states, spin_operators
 
 from Library.ADQC import ADQC_LatentGates
 
@@ -35,25 +35,33 @@ def fidelity(psi1:tc.Tensor, psi0:tc.Tensor):
 def loss_fid(psi1:tc.Tensor, psi0:tc.Tensor):
     return 1 - fidelity(psi1, psi0)
 
-def loss_mag(psi1:tc.Tensor, psi0:tc.Tensor):
+def loss_average_mag(psi1:tc.Tensor, psi0:tc.Tensor):
     mag_diff = mag_from_states(psi1, device=psi1.device) - mag_from_states(psi0, device=psi0.device)
-    loss = tc.norm(mag_diff)/psi1.shape[0]
+    loss = tc.norm(mag_diff)/tc.sqrt(psi1.shape[0])
     return loss
 
-def loss_multi_mag(psi1:tc.Tensor, psi0:tc.Tensor):
-    multi_mag_diff = multi_mag_from_states(psi1, device=psi1.device) - multi_mag_from_states(psi0, device=psi0.device)
-    loss = tc.norm(multi_mag_diff)/psi0.shape[1]/psi0.shape[0]
+def loss_mags(psi1:tc.Tensor, psi0:tc.Tensor):
+    mags_diff = mags_from_states(psi1, device=psi1.device) - mags_from_states(psi0, device=psi0.device)
+    loss = tc.norm(mags_diff)/tc.sqrt(psi0.shape[1]*psi1.shape[0])
+    return loss
+
+def loss_multi_mags(psi1:tc.Tensor, psi0:tc.Tensor):
+    spins = spin_operators('half', device=psi1.device)
+    multi_mags_diff = multi_mags_from_states(psi1, spins, device=psi1.device) - multi_mags_from_states(psi0, spins, device=psi1.device)
+    loss = tc.norm(multi_mags_diff)/tc.sqrt(psi0.shape[1]*psi1.shape[0])
     return loss
 
 def choose_loss(loss_type:str):
     if loss_type == 'fidelity':
         loss = loss_fid
     elif loss_type == 'mag':
-        loss = loss_mag
-    elif loss_type == 'multi_mag':
-        loss = loss_multi_mag
+        loss = loss_average_mag
+    elif loss_type == 'mags':
+        loss = loss_mags
+    elif loss_type == 'multi_mags':
+        loss = loss_multi_mags
     else:
-        raise ValueError("the loss_type should be \'fidelity\' or \'mag\' or \'multi_mag\'")
+        raise ValueError("the loss_type should be \'fidelity\', \'mag\', \'mags\' or \'multi_mags\'")
     return loss
 
 def ADQC(para=None):
