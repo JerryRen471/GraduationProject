@@ -1,3 +1,4 @@
+from math import sqrt
 import torch as tc
 import numpy as np
 import Library.BasicFun as bf
@@ -37,18 +38,26 @@ def loss_fid(psi1:tc.Tensor, psi0:tc.Tensor):
 
 def loss_average_mag(psi1:tc.Tensor, psi0:tc.Tensor):
     mag_diff = mag_from_states(psi1, device=psi1.device) - mag_from_states(psi0, device=psi0.device)
-    loss = tc.norm(mag_diff)/tc.sqrt(psi1.shape[0])
+    loss = tc.norm(mag_diff)/sqrt(psi1.shape[0])
     return loss
 
 def loss_mags(psi1:tc.Tensor, psi0:tc.Tensor):
     mags_diff = mags_from_states(psi1, device=psi1.device) - mags_from_states(psi0, device=psi0.device)
-    loss = tc.norm(mags_diff)/tc.sqrt(psi0.shape[1]*psi1.shape[0])
+    loss = tc.norm(mags_diff)/sqrt(psi0.shape[1]*psi1.shape[0])
     return loss
 
 def loss_multi_mags(psi1:tc.Tensor, psi0:tc.Tensor):
-    spins = spin_operators('half', device=psi1.device)
+    op = spin_operators('half', device=psi1.device)
+    spins = [op['sx'], op['sy'], op['sz']]
     multi_mags_diff = multi_mags_from_states(psi1, spins, device=psi1.device) - multi_mags_from_states(psi0, spins, device=psi1.device)
-    loss = tc.norm(multi_mags_diff)/tc.sqrt(psi0.shape[1]*psi1.shape[0])
+    loss = tc.norm(multi_mags_diff)/sqrt(psi0.shape[1]*psi1.shape[0])
+    return loss
+
+def log_loss_multi_mags(psi1:tc.Tensor, psi0:tc.Tensor):
+    op = spin_operators('half', device=psi1.device)
+    spins = [op['sx'], op['sy'], op['sz']]
+    multi_mags_diff = multi_mags_from_states(psi1, spins, device=psi1.device) - multi_mags_from_states(psi0, spins, device=psi1.device)
+    loss = tc.log(tc.norm(multi_mags_diff)/sqrt(psi0.shape[1]*psi1.shape[0]))
     return loss
 
 def choose_loss(loss_type:str):
@@ -60,8 +69,10 @@ def choose_loss(loss_type:str):
         loss = loss_mags
     elif loss_type == 'multi_mags':
         loss = loss_multi_mags
+    elif loss_type == 'log_multi_mags':
+        loss = log_loss_multi_mags
     else:
-        raise ValueError("the loss_type should be \'fidelity\', \'mag\', \'mags\' or \'multi_mags\'")
+        raise ValueError("the loss_type should be \'fidelity\', \'mag\', \'mags\', \'multi_mags\', \'log_multi_mags\'")
     return loss
 
 def ADQC(para=None):
