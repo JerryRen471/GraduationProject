@@ -23,9 +23,9 @@ train_fide = list()
 test_fide = list()
 
 def add_to_list(pattern, list_, line):
-    ret = re.match(pattern, line)
+    ret = re.search(pattern, line)
     if ret != None:
-        num = float(re.match(r"[+,-,0-9,e,.]+", ret.group()))
+        num = float(re.search("[+\-e\.0-9]+$", ret.group()).group())
         list_.append(num)
 
 with open(data_path+'/fin_loss_train_num.txt', 'r') as f:
