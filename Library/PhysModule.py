@@ -102,6 +102,24 @@ def reduced_density_matrix(state, pos):
     return rho.reshape(dim, dim)
 
 
+def reduced_density_matrces(states, pos):
+    ind = list(range(1, states.ndimension()))
+    if type(pos) is int:
+        ind.remove(pos+1)
+        dim = states.shape[pos+1]
+    else:
+        for n in pos:
+            ind.remove(n+1)
+        dim = 1
+        for n in pos:
+            dim *= states.shape[n+1]
+    rho_ = tc.tensordot(states, states.conj(), [ind, ind])
+    reduced_len = rho_.ndimension()
+    rho__ = tc.diagonal(rho_, dim1=0, dim2=int(reduced_len/2))
+    rho = rho__.permute([reduced_len-2]+list(range(reduced_len-2)))
+    return rho.reshape(rho.shape[0], dim, dim)
+
+
 def magnetizations(state:tc.Tensor, which_ops=None)->tc.Tensor:
     if which_ops is None:
         op = spin_operators('half', if_list=True, device=state.device)
@@ -140,6 +158,30 @@ def multi_mags_from_states(states, spins=None, device='cpu'):
         multi_mags.append(magnetizations(states[_], spins))
     multi_mags = tc.cat(multi_mags, dim=0)
     return multi_mags
+
+def combined_mags(states, which_ops=None):
+    '''
+    para:: states states.shape = [num_of_states, shape_of_each_state]
+    '''
+    if which_ops is None:
+        op = spin_operators('half', device=states.device)
+        which_ops = [op['sx'], op['sy'], op['sz']]
+    if type(which_ops) in [list, tuple]:
+        num_ops = len(which_ops)
+    else:
+        num_ops = 1
+        which_ops = [which_ops]
+    length = states.ndimension()-1
+    mags = tc.zeros((states.shape[0], num_ops, length-1))
+    for n in range(length-1):
+        rhos = reduced_density_matrces(states, [n, n+1])
+        for s in range(num_ops):
+            # print(rho)
+            # print(which_ops[s])
+            obs = tc.kron(which_ops[s], which_ops[s])
+            mags[:, s, n] = tc.einsum('abc,cb->a', rhos.type(tc.complex64), obs.type(tc.complex64))
+    return mags
+
 
 def combined_mag(state, which_ops=None):
     if which_ops is None:
