@@ -9,7 +9,7 @@ from torch.optim import Adam
 from matplotlib import pyplot as plt
 from Library.BasicFun import choose_device
 from Library.MathFun import series_sin_cos
-from Library.PhysModule import mag_from_states, mags_from_states, multi_mags_from_states, spin_operators
+from Library.PhysModule import mag_from_states, mags_from_states, multi_mags_from_states, combined_mags, spin_operators
 
 from Library.ADQC import ADQC_LatentGates
 
@@ -60,6 +60,13 @@ def log_loss_multi_mags(psi1:tc.Tensor, psi0:tc.Tensor):
     loss = tc.log(tc.norm(multi_mags_diff)/sqrt(psi0.shape[1]*psi1.shape[0]))
     return loss
 
+def loss_combined_mags(psi1:tc.Tensor, psi0:tc.Tensor):
+    op = spin_operators('half', device=psi1.device)
+    spins = [op['sx'], op['sy'], op['sz']]
+    combined_mags_diff = combined_mags(psi1, spins) - combined_mags(psi0, spins)
+    loss = tc.norm(combined_mags_diff)/sqrt(psi1.shape[0])
+    return loss
+
 def choose_loss(loss_type:str):
     if loss_type == 'fidelity':
         loss = loss_fid
@@ -71,8 +78,10 @@ def choose_loss(loss_type:str):
         loss = loss_multi_mags
     elif loss_type == 'log_multi_mags':
         loss = log_loss_multi_mags
+    elif loss_type == 'combined_mags':
+        loss = loss_combined_mags
     else:
-        raise ValueError("the loss_type should be \'fidelity\', \'mag\', \'mags\', \'multi_mags\', \'log_multi_mags\'")
+        raise ValueError("the loss_type should be \'fidelity\', \'mag\', \'mags\', \'multi_mags\', \'log_multi_mags\', \'combined_mags\'")
     return loss
 
 def ADQC(para=None):
