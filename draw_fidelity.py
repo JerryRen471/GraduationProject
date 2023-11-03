@@ -51,7 +51,7 @@ legends = []
 plt.plot(x, train_fide, label='train fidelity')
 plt.plot(x, test_fide, label= 'test fidelity')
 plt.legend()
-plt.xlabel('epochs')
+plt.xlabel('train_num')
 plt.ylabel('fidelity')
 plt.savefig(pic_path+'/diff_train_num_fide.svg')
 plt.close()
