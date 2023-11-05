@@ -39,8 +39,8 @@ with open(data_path+'/fin_loss_train_num.txt', 'r') as f:
 x = train_num_list
 
 legends = []
-plt.plot(x, train_loss, label='train loss')
-plt.plot(x, test_loss, label= 'test loss')
+plt.plot(x, train_loss, marker='+', label='train loss')
+plt.plot(x, test_loss, marker='x', label= 'test loss')
 plt.legend()
 plt.xlabel('train_num')
 plt.ylabel('loss')
@@ -48,8 +48,8 @@ plt.savefig(pic_path+'/diff_train_num_loss.svg')
 plt.close()
 
 legends = []
-plt.plot(x, train_fide, label='train fidelity')
-plt.plot(x, test_fide, label= 'test fidelity')
+plt.plot(x, train_fide, marker='+', label='train fidelity')
+plt.plot(x, test_fide, marker='x', label= 'test fidelity')
 plt.legend()
 plt.xlabel('train_num')
 plt.ylabel('fidelity')
