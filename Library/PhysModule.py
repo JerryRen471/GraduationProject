@@ -139,27 +139,16 @@ def magnetizations(state:tc.Tensor, which_ops=None)->tc.Tensor:
             mag[s, n] = tc.einsum('ab,ba->', rho.type(tc.complex64), which_ops[s].type(tc.complex64))
     return mag
 
-def mags_from_states(states, device='cpu'):
-    spin = spin_operators('half', device=device)
-    mag_z = list()
-    for _ in range(states.shape[0]):
-        mag_z.append(magnetizations(states[_], [spin['sz']]))
-    mag_z = tc.cat(mag_z, dim=0)
-    return mag_z
 
-def mag_from_states(states, device='cpu'):
-    mag_z = mags_from_states(states=states, device=device)
-    mag_z_tot = mag_z.sum(dim=1) / mag_z.shape[1] # 不同时刻链的z方向总磁矩对链长做平均
-    return mag_z_tot
+def op_dir_prod_n_times(op:tc.Tensor, n:int):
+    temp_op = op
+    new_op = temp_op
+    for _ in range(n):
+        new_op = temp_op
+        temp_op = tc.kron(temp_op, op)
+    return new_op
 
-def multi_mags_from_states(states, spins=None, device='cpu'):
-    multi_mags = list()
-    for _ in range(states.shape[0]):
-        multi_mags.append(magnetizations(states[_], spins))
-    multi_mags = tc.cat(multi_mags, dim=0)
-    return multi_mags
-
-def combined_mags(states, which_ops=None):
+def n_combined_mags(states, n, which_ops=None):
     '''
     para:: states states.shape = [num_of_states, shape_of_each_state]
     '''
@@ -172,14 +161,37 @@ def combined_mags(states, which_ops=None):
         num_ops = 1
         which_ops = [which_ops]
     length = states.ndimension()-1
-    mags = tc.zeros((states.shape[0], num_ops, length-1))
-    for n in range(length-1):
-        rhos = reduced_density_matrces(states, [n, n+1])
+    mags = tc.zeros((states.shape[0], num_ops, length-n+1))
+    for i in range(length-n+1):
+        rhos = reduced_density_matrces(states, list(range(i, i+n)))
         for s in range(num_ops):
             # print(rho)
             # print(which_ops[s])
-            obs = tc.kron(which_ops[s], which_ops[s])
-            mags[:, s, n] = tc.einsum('abc,cb->a', rhos.type(tc.complex64), obs.type(tc.complex64))
+            obs = op_dir_prod_n_times(which_ops[s], n) # error
+            mags[:, s, i] = tc.einsum('abc,cb->a', rhos.type(tc.complex64), obs.type(tc.complex64))
+    return mags
+
+
+def mags_from_states(states, device='cpu'):
+    spin = spin_operators('half', device=device)
+    mag_z = n_combined_mags(states, n=1, which_ops=[spin['sz']])
+    return mag_z
+
+def mag_from_states(states, device='cpu'):
+    mag_z = mags_from_states(states=states, device=device)
+    mag_z_tot = mag_z.sum(dim=1) / mag_z.shape[1] # 不同时刻链的z方向总磁矩对链长做平均
+    return mag_z_tot
+
+def multi_mags_from_states(states, spins=None, device='cpu'):
+    multi_mags = list()
+    multi_mags = n_combined_mags(states, n=1, which_ops=spins)
+    return multi_mags
+
+def combined_mags(states, which_ops=None):
+    '''
+    para:: states states.shape = [num_of_states, shape_of_each_state]
+    '''
+    mags = n_combined_mags(states, n=2, which_ops=which_ops)
     return mags
 
 
