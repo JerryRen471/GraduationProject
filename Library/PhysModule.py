@@ -167,7 +167,7 @@ def n_combined_mags(states, n, which_ops=None):
         for s in range(num_ops):
             # print(rho)
             # print(which_ops[s])
-            obs = op_dir_prod_n_times(which_ops[s], n) # error
+            obs = op_dir_prod_n_times(which_ops[s], n)
             mags[:, s, i] = tc.einsum('abc,cb->a', rhos.type(tc.complex64), obs.type(tc.complex64))
     return mags
 
@@ -192,6 +192,38 @@ def combined_mags(states, which_ops=None):
     para:: states states.shape = [num_of_states, shape_of_each_state]
     '''
     mags = n_combined_mags(states, n=2, which_ops=which_ops)
+    return mags
+
+
+def complete_two_dir_prod_op(ops1, ops2):
+    dir_prod_list = list()
+    for opi in ops1:
+        for opj in ops2:
+            op_temp = tc.kron(opi, opj)
+            dir_prod_list.append(op_temp)
+    return dir_prod_list
+
+
+def two_body_ob(states, ops=None):
+    if ops == None:
+        op = spin_operators('half', if_list=False, device=states.device)
+        which_ops = [op['sx'], op['sy'], op['sz']]
+        ops = complete_two_dir_prod_op(which_ops, which_ops)
+    if type(ops) in [list, tuple]:
+        num_ops = len(ops)
+    else:
+        num_ops = 1
+        ops = list(ops)
+    length = states.ndimension()-1
+    n = 2
+    mags = tc.zeros((states.shape[0], num_ops, length-n+1))
+    for i in range(length-n+1):
+        rhos = reduced_density_matrces(states, list(range(i, i+n)))
+        for s in range(num_ops):
+            # print(rho)
+            # print(which_ops[s])
+            obs = ops[s]
+            mags[:, s, i] = tc.einsum('abc,cb->a', rhos.type(tc.complex64), obs.type(tc.complex64))
     return mags
 
 
