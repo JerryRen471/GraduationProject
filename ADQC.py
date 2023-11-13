@@ -9,7 +9,7 @@ from torch.optim import Adam
 from matplotlib import pyplot as plt
 from Library.BasicFun import choose_device
 from Library.MathFun import series_sin_cos
-from Library.PhysModule import mag_from_states, mags_from_states, multi_mags_from_states, combined_mags, spin_operators
+from Library.PhysModule import mag_from_states, mags_from_states, multi_mags_from_states, combined_mags, spin_operators, two_body_ob
 
 from Library.ADQC import ADQC_LatentGates
 
@@ -80,8 +80,10 @@ def choose_loss(loss_type:str):
         loss = log_loss_multi_mags
     elif loss_type == 'combined_mags':
         loss = loss_combined_mags
+    elif loss_type == 'complete':
+        loss = loss_complete_combined_mags
     else:
-        raise ValueError("the loss_type should be \'fidelity\', \'mag\', \'mags\', \'multi_mags\', \'log_multi_mags\', \'combined_mags\'")
+        raise ValueError("the loss_type should be \'fidelity\', \'mag\', \'mags\', \'multi_mags\', \'log_multi_mags\', \'combined_mags\', \'complete\'")
     return loss
 
 def ADQC(para=None):
