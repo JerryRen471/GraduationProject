@@ -42,10 +42,10 @@ class QC2Mat(LinearOperator):
         para['device'] = bf.choose_device(para['device'])
         self.para = para
         self.qc = tc.load('GraduationProject/Data/qc_dt{:d}_tot{:.0f}.pth'.format(para['print_time_it'], para['time_tot']))
-        self.qc.single_state = True
         super().__init__(dtype=para['dtype'], shape=(2**para['length'], 2**para['length']))
 
     def _matvec(self, x):
+        self.qc.single_state = True
         x_ = tc.from_numpy(x)
         x_ = x_.reshape([2] * self.para['length'])
         with tc.no_grad():
@@ -55,9 +55,16 @@ class QC2Mat(LinearOperator):
         return y
 
     def _matmat(self, B):
-        C = np.zeros(B.shape, dtype=np.complex128)
-        for i in range(B.shape[1]):
-            C[:, i] = self._matvec(B[:, i])
+        self.qc.single_state = False
+        B = tc.from_numpy(B)
+        shape_ = list(B.shape[0]) + [2] * self.para['length']
+        B = B.reshape(shape_)
+        with tc.no_grad():
+            C = self.qc(B.to(self.para['device'])).reshape([B.shape[0], -1])
+        # C = np.zeros(B.shape, dtype=np.complex128)
+        # for i in range(B.shape[1]):
+        #     C[:, i] = self._matvec(B[:, i])
+        C = C.cpu().numpy()
         return C
 
     def _rmatvec(self, x):
