@@ -1,44 +1,24 @@
+from cv2 import mean
+import numpy as np
 import torch as tc
-import Library.BasicFun as bf
+
+# evol_mat = np.load('GraduationProject/Data/evol_mat.npy')
+# evol_mat = tc.from_numpy(evol_mat)
+# print('evol_mat.shape is', evol_mat.shape)
+
+# A = tc.mm(evol_mat, evol_mat.T.conj())
+# a = tc.diag(A)
+# print(a)
 
 def fidelity(psi1:tc.Tensor, psi0:tc.Tensor):
-    f = 0
-    for i in range(psi1.shape[0]):
-        psi0_ = psi0[i]
-        psi1_ = psi1[i]
-        x_pos = list(range(len(psi1_.shape)))
-        y_pos = x_pos
-        f_ = bf.tmul(psi1_.conj(), psi0_, x_pos, y_pos)
-        f += (f_*f_.conj()).real
-    f = f/psi1.shape[0]
+    psi0_ = psi0.reshape(psi0.shape[0], -1)
+    psi1_ = psi1.reshape(psi1.shape[0], -1)
+    fides = tc.einsum('ab,ab->a', psi1_.conj(), psi0_)
+    f = tc.mean(fides)
     return f
 
-def rand_states(number:int, length:int, device=tc.device('cuda:0'))->tc.Tensor:
-    number = int(number)
-    shape = [number, 2 ** length]
-    states = tc.rand(shape, dtype=tc.complex128, device=device)
-    shape_ = [number] + [2]*length
-    norm = tc.sum(states * states.conj(), dim=1, keepdim=True)
-    states = states / tc.sqrt(norm)
-    states = states.reshape(shape_)
-    return states
+from rand_dir_and_nondir import rand_states
 
-def rand_dir_prod_states(number:int, length:int, device=tc.device('cuda:0'))->tc.Tensor:
-    number = int(number)
-    shape = [number, 2]
-    states = tc.rand(shape, dtype=tc.complex128, device=device)
-    for _ in range(length - 1):
-        states = tc.einsum('ij,ik->ijk', states, tc.rand(shape, dtype=tc.complex128, device=device))
-        states = states.reshape(number, -1)
-    print(states.shape)
-    shape_ = [number] + [2]*length
-    norm = tc.sum(states * states.conj(), dim=1, keepdim=True)
-    states = states / tc.sqrt(norm)
-    states = states.reshape(shape_)
-    return states
-
-x = rand_dir_prod_states(10, 2, device=tc.device('cpu'))
-y = rand_dir_prod_states(3, 2, device=tc.device('cpu'))
-
-z = fidelity(x, x)
-print(z)
+psi0 = rand_states(16, 4, device=tc.device('cpu'))
+psi1 = rand_states(16, 4, device=tc.device('cpu'))
+print(fidelity(psi1, psi0))
