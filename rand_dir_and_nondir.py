@@ -181,3 +181,16 @@ if __name__ == '__main__':
     path = 'GraduationProject/Data'+para['folder']
     mkdir(path)
     np.save(path+'/data_num{:d}'.format(args.train_num), data)
+
+
+    import os
+    evol_mat_path = 'GraduationProject/Data/evol_mat'
+    if os.access(evol_mat_path, os.F_OK):
+        pass
+    else:
+        E = tc.eye(2**para['length'], dtype=tc.complex128, device=para['device'])
+        shape_ = [E.shape[0]] + [2] * para['length']
+        E = E.reshape(shape_)
+        evol_mat = Heisenberg_mul_states_evl(E, para).reshape(E.shape[0], -1)
+        print('evol_mat.shape is', evol_mat.shape)
+        np.save(evol_mat_path, evol_mat.cpu())
