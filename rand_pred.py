@@ -42,3 +42,24 @@ print(data['train_set'].dtype)
 qc = ADQC.ADQC(para_adqc)
 qc, results_adqc, para_adqc = ADQC.train(qc, data, para_adqc)
 np.save(path+'/adqc_result_num{:d}'.format(args.train_num), results_adqc)
+
+
+qc.single_state = False
+E = tc.eye(2**para_adqc['length_in'], dtype=tc.complex128, device=para_adqc['device'])
+shape_ = [E.shape[0]] + [2] * para_adqc['length_in']
+E = E.reshape(shape_)
+with tc.no_grad():
+    qc_mat = qc(E).reshape([E.shape[0], -1])
+
+print('qc_mat.shape is', qc_mat.shape)
+# np.save(path+'/qc_mat_num{:d}'.format(args.train_num), qc_mat.cpu())
+
+evol_mat = np.load('GraduationProject/Data/evol_mat.npy')
+evol_mat = tc.from_numpy(evol_mat)
+print('evol_mat.shape is', evol_mat.shape)
+
+similarity = 1 - 0.5*tc.norm(qc_mat.cpu() - evol_mat)/tc.norm(evol_mat)
+print('similarity is', similarity)
+with open(path+'/similarity.txt', 'a') as f:
+    f.write("{:.6e}\t{:d}\n".format(similarity, args.train_num))
+    pass
