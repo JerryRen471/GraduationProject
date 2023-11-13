@@ -55,3 +55,21 @@ plt.xlabel('train_num')
 plt.ylabel('fidelity')
 plt.savefig(pic_path+'/diff_train_num_fide.svg')
 plt.close()
+
+# plot similarity between adqc and evolution matrix
+
+similarity_list = []
+train_num_list = []
+with open(data_path+'/similarity.txt', 'r') as f:
+    for line in f.readlines():
+        similarity_list.append(float(line.split('\t')[0]))
+        train_num_list.append(int(line.split('\t')[1]))
+
+legends = []
+plt.plot(train_num_list, similarity_list, marker='+', label='train_similarity')
+# plt.plot(x, test_fide, marker='x', label= 'test fidelity')
+plt.legend()
+plt.xlabel('train_num')
+plt.ylabel('similarity')
+plt.savefig(pic_path+'/diff_train_num_simil.svg')
+plt.close()
