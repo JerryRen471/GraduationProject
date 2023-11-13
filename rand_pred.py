@@ -25,9 +25,9 @@ para_adqc = dict(para, **para_adqc)
 import argparse
 parser = argparse.ArgumentParser(description='manual to this script')
 # parser.add_argument('--seed', type=int, default=None)
-parser.add_argument('--folder', type=str, default='rand_init/')
-parser.add_argument('--train_num', type=int, default=100)
-parser.add_argument('--loss_type', type=str, default='fidelity')
+parser.add_argument('--folder', type=str, default="/loss_multi_mags/dn")
+parser.add_argument('--train_num', type=int, default=10)
+parser.add_argument('--loss_type', type=str, default='multi_mags')
 args = parser.parse_args()
 # para_adqc['folder'] = args.folder
 # para_adqc['seed'] = args.seed
