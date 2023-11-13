@@ -8,9 +8,9 @@ from torch.utils.data import DataLoader, TensorDataset
 
 # 通用参数
 para = {'lr': 1e-2,  # 初始学习率
-        'length_tot': 500,  # 序列总长度
-        'order': 10,  # 生成序列的傅里叶阶数
-        'length': 1,  # 每个样本长度
+        # 'length_tot': 500,  # 序列总长度
+        # 'order': 10,  # 生成序列的傅里叶阶数
+        # 'length': 1,  # 每个样本长度
         'batch_size': 2000,  # batch大小
         'it_time': 1000,  # 总迭代次数
         'dtype': tc.complex128,  # 数据精度
