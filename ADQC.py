@@ -22,15 +22,10 @@ def split_time_series(data, length, device=None, dtype=tc.float32):
     return tc.cat(samples, dim=0).to(device=device, dtype=dtype), tc.stack(targets, dim=0).to(device=device, dtype=dtype)
 
 def fidelity(psi1:tc.Tensor, psi0:tc.Tensor):
-    f = 0
-    for i in range(psi1.shape[0]):
-        psi0_ = psi0[i]
-        psi1_ = psi1[i]
-        x_pos = list(range(len(psi1_.shape)))
-        y_pos = x_pos
-        f_ = bf.tmul(psi1_.conj(), psi0_, x_pos, y_pos)
-        f += (f_*f_.conj()).real
-    f = f/psi1.shape[0]
+    psi0_ = psi0.reshape(psi0.shape[0], -1)
+    psi1_ = psi1.reshape(psi1.shape[0], -1)
+    fides = tc.einsum('ab,ab->a', psi1_.conj(), psi0_)
+    f = tc.mean(fides)
     return f
 
 def loss_fid(psi1:tc.Tensor, psi0:tc.Tensor):
