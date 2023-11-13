@@ -62,6 +62,11 @@ def loss_combined_mags(psi1:tc.Tensor, psi0:tc.Tensor):
     loss = tc.norm(combined_mags_diff)/sqrt(psi1.shape[0])
     return loss
 
+def loss_complete_combined_mags(psi1:tc.Tensor, psi0:tc.Tensor):
+    diff = two_body_ob(psi1) - two_body_ob(psi0)
+    loss = tc.norm(diff)/sqrt(psi1.shape[0])
+    return loss
+
 def choose_loss(loss_type:str):
     if loss_type == 'fidelity':
         loss = loss_fid
