@@ -216,7 +216,7 @@ def two_body_ob(states, ops=None):
         ops = list(ops)
     length = states.ndimension()-1
     n = 2
-    mags = tc.zeros((states.shape[0], num_ops, length-n+1))
+    mags = tc.zeros((states.shape[0], num_ops, length-n+1), dtype=tc.complex64)
     for i in range(length-n+1):
         rhos = reduced_density_matrces(states, list(range(i, i+n)))
         for s in range(num_ops):
