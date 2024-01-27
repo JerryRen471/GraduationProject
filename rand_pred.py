@@ -1,3 +1,4 @@
+from math import dist
 import ADQC
 import torch as tc
 import numpy as np
@@ -51,15 +52,10 @@ E = E.reshape(shape_)
 with tc.no_grad():
     qc_mat = qc(E).reshape([E.shape[0], -1])
 
-print('qc_mat.shape is', qc_mat.shape)
-# np.save(path+'/qc_mat_num{:d}'.format(args.train_num), qc_mat.cpu())
+print('\nqc_mat.shape is', qc_mat.shape)
+np.save(path+'/qc_mat_num{:d}'.format(args.train_num), qc_mat.cpu())
 
-evol_mat = np.load('GraduationProject/Data/evol_mat.npy')
-evol_mat = tc.from_numpy(evol_mat)
-print('evol_mat.shape is', evol_mat.shape)
+# A = tc.mm(qc_mat, qc_mat.T.conj())
+# print(A)
+# print(tc.diag(A))
 
-similarity = 1 - 0.5*tc.norm(qc_mat.cpu() - evol_mat)/tc.norm(evol_mat)
-print('similarity is', similarity)
-with open(path+'/similarity.txt', 'a') as f:
-    f.write("{:.6e}\t{:d}\n".format(similarity, args.train_num))
-    pass
