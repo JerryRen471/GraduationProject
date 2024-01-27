@@ -40,8 +40,6 @@ def Heisenberg_mul_states_evl(states, para=None):
     para_def['BC'] = 'open'
     para_def['time_tot'] = 50*2
     para_def['tau'] = 0.01
-    para_def['print_time_it'] = 10
-    para_def['print_dtime'] = para_def['tau'] * para_def['print_time_it']
     para_def['hl'] = 2
     para_def['device'] = None
     para_def['dtype'] = tc.complex64
@@ -50,7 +48,6 @@ def Heisenberg_mul_states_evl(states, para=None):
     para = dict(para_def, **para)
     para['d'] = phy.from_spin2phys_dim(para['spin'])
     para['time_it'] = round(para['time_tot'] / para['tau'])
-    # para['print_time_it'] = round(para['print_dtime'] / para['tau'])
     para['device'] = bf.choose_device(para['device'])
     # print(para)
 
@@ -88,8 +85,9 @@ def Heisenberg_mul_states_evl(states, para=None):
     else:
         which_where[0][0] = 1
         which_where[-1][0] = 2
-    states_new = pure_states_evolution(states, [gate, gate_l, gate_r], which_where)
-    return states_new
+    for t in range(para['time_it']):
+        states = pure_states_evolution(states, [gate, gate_l, gate_r], which_where)
+    return states
 
 def rand_states(number:int, length:int, device=tc.device('cuda:0'))->tc.Tensor:
     number = int(number)
@@ -131,7 +129,6 @@ if __name__ == '__main__':
     d = phy.from_spin2phys_dim(spin)
     device = tc.device('cuda:0')
     dtype = tc.complex128
-    seed = 100
 
     import argparse
     parser = argparse.ArgumentParser(description='manual to this script')
@@ -157,7 +154,6 @@ if __name__ == '__main__':
     para['J'] = [args.Jx, args.Jy, args.Jz]
     para['h'] = [args.hx, 0, 0]
     para['time_tot'] = 0.01
-    para['print_time_it'] = 1
     para['hl'] = args.hl
     para['folder'] = args.folder
     para['seed'] = args.seed
