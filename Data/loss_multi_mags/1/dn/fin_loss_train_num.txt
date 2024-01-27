@@ -1,3 +1,4 @@
+---
 train_num=10
 train_loss:6.0671e-03	test_loss:6.8743e-03
 train_fide:9.9875e-01	test_fide:9.9456e-01
@@ -60,3 +61,33 @@ train_num=100
 train_loss:5.0216e-03	test_loss:4.3071e-03
 train_fide:9.9995e-01	test_fide:9.9990e-01
 ---
+train_num=1
+train_loss:1.2113e-02	test_loss:6.4177e-01
+train_fide:9.9879e-01	test_fide:1.5932e-01
+train_num=2
+train_loss:6.2009e-03	test_loss:4.1994e-01
+train_fide:9.9819e-01	test_fide:4.0176e-01
+train_num=3
+train_loss:8.4483e-03	test_loss:3.9012e-01
+train_fide:9.9556e-01	test_fide:4.3320e-01
+train_num=4
+train_loss:8.0618e-03	test_loss:2.1983e-01
+train_fide:9.9577e-01	test_fide:6.3068e-01
+train_num=5
+train_loss:8.1820e-03	test_loss:4.6857e-02
+train_fide:9.9603e-01	test_fide:8.7165e-01
+train_num=6
+train_loss:7.2002e-03	test_loss:3.6626e-02
+train_fide:9.9675e-01	test_fide:9.0505e-01
+train_num=7
+train_loss:7.9149e-03	test_loss:2.4067e-02
+train_fide:9.9635e-01	test_fide:9.5013e-01
+train_num=8
+train_loss:6.8519e-03	test_loss:8.3388e-02
+train_fide:9.9686e-01	test_fide:8.8086e-01
+train_num=9
+train_loss:6.5878e-03	test_loss:1.4871e-02
+train_fide:9.9812e-01	test_fide:9.5989e-01
+train_num=10
+train_loss:6.1412e-03	test_loss:9.4244e-03
+train_fide:9.9868e-01	test_fide:9.9104e-01
