@@ -24,7 +24,7 @@ def split_time_series(data, length, device=None, dtype=tc.float32):
 def fidelity(psi1:tc.Tensor, psi0:tc.Tensor):
     psi0_ = psi0.reshape(psi0.shape[0], -1)
     psi1_ = psi1.reshape(psi1.shape[0], -1)
-    fides = tc.einsum('ab,ab->a', psi1_.conj(), psi0_)
+    fides = tc.abs(tc.einsum('ab,ab->a', psi1_.conj(), psi0_))
     f = tc.mean(fides)
     return f
 
@@ -171,7 +171,9 @@ def train(qc:ADQC_LatentGates, data:dict, para:dict):
             optimizer.step()
             optimizer.zero_grad()
             loss_tmp += loss.item()
-            train_fide_tmp += fidelity(psi1, lbs)
+            fide = fidelity(psi1, lbs)
+            fide_sr = fide.abs()
+            train_fide_tmp += fide_sr
             train_batches += 1
 
         if (t+1) % para['print_time'] == 0:
@@ -185,7 +187,9 @@ def train(qc:ADQC_LatentGates, data:dict, para:dict):
                     psi1 = qc(psi0)
                     loss = loss_fun(psi1, lbs)
                     loss_tmp += loss.item()
-                    test_fide_tmp += fidelity(psi1, lbs)
+                    fide = fidelity(psi1, lbs)
+                    fide_sr = fide.abs()
+                    test_fide_tmp += fide_sr
                     test_batches += 1
             loss_test_rec.append(loss_tmp / test_batches)
             test_fide.append(test_fide_tmp.cpu().detach().numpy() / test_batches)
