@@ -19,11 +19,11 @@ test_loss_pattern = r"test_loss:[\S]+"
 train_fide_pattern = r"train_fide:[\S]+"
 test_fide_pattern = r"test_fide:[\S]+"
 
-train_num_list = [[]]
-train_loss_list = [[]]
-test_loss_list = [[]]
-train_fide_list = [[]]
-test_fide_list = [[]]
+train_num_list = []
+train_loss_list = []
+test_loss_list = []
+train_fide_list = []
+test_fide_list = []
 
 def pattern_num(pattern, line):
     ret = re.search(pattern, line)
@@ -83,21 +83,18 @@ for i in range(len(train_num_list)):
 
 # plot gate_fidelity between adqc and evolution matrix
 
-gate_fidelity_list = [[]]
-train_num_list = [[]]
+gate_fidelity_list = []
+train_num_list = []
 with open(data_path+'/gate_fidelity.txt', 'r') as f:
     for line in f.readlines():
-        sim = float(line.split('\t')[0])
-        train_num = int(line.split('\t')[1])
-        try:
-            last_num = train_num_list[-1][-1]
-        except:
-            last_num = 0
-        if train_num <= last_num:
+        if line == '---\n':
             train_num_list.append([])
             gate_fidelity_list.append([])
-        gate_fidelity_list[-1].append(sim)
-        train_num_list[-1].append(train_num)
+        else:
+            sim = float(line.split('\t')[0])
+            train_num = int(line.split('\t')[1])
+            gate_fidelity_list[-1].append(sim)
+            train_num_list[-1].append(train_num)
 
 legend = []
 for i in range(len(train_num_list)):
