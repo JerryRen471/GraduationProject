@@ -10,15 +10,17 @@ import torch as tc
 # a = tc.diag(A)
 # print(a)
 
-def fidelity(psi1:tc.Tensor, psi0:tc.Tensor):
-    psi0_ = psi0.reshape(psi0.shape[0], -1)
-    psi1_ = psi1.reshape(psi1.shape[0], -1)
-    fides = tc.einsum('ab,ab->a', psi1_.conj(), psi0_)
-    f = tc.mean(fides)
+def process_fide(U1:tc.Tensor, U0:tc.Tensor):
+    M = tc.mm(U0.T.conj(), U1)
+    n = U0.shape[0]
+    f = 1/(n*(n+1)) * (n + tc.abs(tc.einsum('ii->',M))**2)
     return f
 
-from rand_dir_and_nondir import rand_states
-
-psi0 = rand_states(16, 4, device=tc.device('cpu'))
-psi1 = rand_states(16, 4, device=tc.device('cpu'))
-print(fidelity(psi1, psi0))
+A = tc.rand([2,2], dtype=tc.complex128)
+B = A - 1 * tc.rand([2,2], dtype=tc.complex128)
+u, s, v = tc.svd(A)
+U0 = tc.mm(u, v.T.conj())
+u, s, v = tc.svd(B)
+U1 = tc.mm(u, v.T.conj())
+f = process_fide(U1=U0, U0=U0)
+print(f)
