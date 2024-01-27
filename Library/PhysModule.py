@@ -207,8 +207,9 @@ def complete_two_dir_prod_op(ops1, ops2):
 def two_body_ob(states, ops=None):
     if ops == None:
         op = spin_operators('half', if_list=False, device=states.device)
-        which_ops = [op['sx'], op['sy'], op['sz']]
+        which_ops = [op['id'],op['sx'], op['sy'], op['sz']]
         ops = complete_two_dir_prod_op(which_ops, which_ops)
+        ops.pop(0)
     if type(ops) in [list, tuple]:
         num_ops = len(ops)
     else:
@@ -294,4 +295,13 @@ def fidelity(psi1:tc.Tensor, psi0:tc.Tensor):
         f_ = bf.tmul(psi1_.conj(), psi0_, x_pos, y_pos)
         f += (f_*f_.conj()).real
     f = f/psi1.shape[0]
+    return f
+
+def process_fide(U1:tc.Tensor, U0:tc.Tensor):
+    '''
+    U1 and U0 must be square matrices with the same shape
+    '''
+    M = tc.mm(U0.T.conj(), U1)
+    n = U0.shape[0]
+    f = 1/(n*(n+1)) * (n + tc.abs(tc.einsum('ii->',M))**2)
     return f
