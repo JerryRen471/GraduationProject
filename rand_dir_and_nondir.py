@@ -143,6 +143,7 @@ if __name__ == '__main__':
     parser.add_argument('--test_num', type=int, default=500)
     parser.add_argument('--folder', type=str, default='mixed_rand_states/')
     parser.add_argument('--gen_type', type=str, default='nn')
+    parser.add_argument('--time_tot', type=float, default=0.01)
     args = parser.parse_args()
 
     para = dict()
@@ -153,7 +154,7 @@ if __name__ == '__main__':
     para['dtype'] = dtype
     para['J'] = [args.Jx, args.Jy, args.Jz]
     para['h'] = [args.hx, 0, 0]
-    para['time_tot'] = 0.01
+    para['time_tot'] = args.time_tot
     para['hl'] = args.hl
     para['folder'] = args.folder
     para['seed'] = args.seed
