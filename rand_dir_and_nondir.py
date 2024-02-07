@@ -89,7 +89,23 @@ def Heisenberg_mul_states_evl(states, para=None):
         states = pure_states_evolution(states, [gate, gate_l, gate_r], which_where)
     return states
 
+'''用循环生成n个[1, m]的随机张量和直接生成一个[n, m]的随机张量是一样的'''
 def rand_states(number:int, length:int, device=tc.device('cuda:0'))->tc.Tensor:
+    number = int(number)
+    shape = [1, 2 ** length]
+    states = tc.randn(shape, dtype=tc.complex128, device=device)
+    sigma = tc.rand([number,1], dtype=tc.complex128, device=device)*1
+    mu = tc.rand([number,1], dtype=tc.complex128, device=device)
+    # print('mu=',mu)
+    states = states*sigma+mu
+    shape_ = [number] + [2]*length
+    norm = tc.sum(states * states.conj(), dim=1, keepdim=True)
+    # print('norm=',norm)
+    states = states / tc.sqrt(norm.real)
+    states = states.reshape(shape_)
+    return states
+
+def rand_states_(number:int, length:int, device=tc.device('cuda:0'))->tc.Tensor:
     number = int(number)
     shape = [number, 2 ** length]
     states = tc.rand(shape, dtype=tc.complex128, device=device)
