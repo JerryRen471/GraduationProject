@@ -10,17 +10,36 @@ import torch as tc
 # a = tc.diag(A)
 # print(a)
 
-def process_fide(U1:tc.Tensor, U0:tc.Tensor):
-    M = tc.mm(U0.T.conj(), U1)
-    n = U0.shape[0]
-    f = 1/(n*(n+1)) * (n + tc.abs(tc.einsum('ii->',M))**2)
-    return f
+'''用循环生成n个[1, m]的随机张量和直接生成一个[n, m]的随机张量是一样的'''
 
-A = tc.rand([2,2], dtype=tc.complex128)
-B = A - 1 * tc.rand([2,2], dtype=tc.complex128)
-u, s, v = tc.svd(A)
-U0 = tc.mm(u, v.T.conj())
-u, s, v = tc.svd(B)
-U1 = tc.mm(u, v.T.conj())
-f = process_fide(U1=U0, U0=U0)
-print(f)
+# tc.manual_seed(1)
+def rand_normal_dist_states(number:int, length:int, device=tc.device('cuda:0'))->tc.Tensor:
+    number = int(number)
+    shape = [1, 2 ** length]
+    states = tc.randn(shape, dtype=tc.complex128, device=device)
+    sigma = tc.rand([number,1], dtype=tc.complex128, device=device)*1
+    mu = tc.rand([number,1], dtype=tc.complex128, device=device)
+    print('mu=',mu)
+    states = states*sigma+mu
+    shape_ = [number] + [2]*length
+    norm = tc.sum(states * states.conj(), dim=1, keepdim=True)
+    print('norm=',norm)
+    # states = states / tc.sqrt(norm.real)
+    # states = states.reshape(shape_)
+    return states
+
+a = rand_normal_dist_states(2, 10, device=tc.device('cpu'))
+print('a=',a)
+norm = tc.sum(a * a.conj(), dim=1, keepdim=True)
+# print(norm)
+
+b = tc.sum(a, dim=[1])/a.shape[1]
+print(b)
+print(tc.var(a, dim=1))
+
+a = tc.tensor([[1, 2, 3], [4, 5, 6]])
+b = tc.tensor([[1],[2]])
+# print(a.shape)
+# print(b.shape)
+# print(a*b)
+
