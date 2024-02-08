@@ -1,4 +1,4 @@
-from cv2 import mean
+# from cv2 import mean
 import numpy as np
 import torch as tc
 
@@ -11,6 +11,13 @@ import torch as tc
 # print(a)
 
 '''用循环生成n个[1, m]的随机张量和直接生成一个[n, m]的随机张量是一样的'''
+tc.manual_seed(10)
+# print('for循环')
+# for _ in range(2):
+#     print(tc.rand([1,2]))
+print('tc.rand')
+print(tc.rand([2,2]))
+
 
 # tc.manual_seed(1)
 def rand_normal_dist_states(number:int, length:int, device=tc.device('cuda:0'))->tc.Tensor:
