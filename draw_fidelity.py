@@ -19,11 +19,11 @@ test_loss_pattern = r"test_loss:[\S]+"
 train_fide_pattern = r"train_fide:[\S]+"
 test_fide_pattern = r"test_fide:[\S]+"
 
-train_num_list = []
-train_loss_list = []
-test_loss_list = []
-train_fide_list = []
-test_fide_list = []
+train_num_list = [[]]
+train_loss_list = [[]]
+test_loss_list = [[]]
+train_fide_list = [[]]
+test_fide_list = [[]]
 
 def pattern_num(pattern, line):
     ret = re.search(pattern, line)
@@ -83,8 +83,8 @@ for i in range(len(train_num_list)):
 
 # plot gate_fidelity between adqc and evolution matrix
 
-gate_fidelity_list = []
-train_num_list = []
+gate_fidelity_list = [[]]
+train_num_list = [[]]
 with open(data_path+'/gate_fidelity.txt', 'r') as f:
     for line in f.readlines():
         if line == '---\n':
