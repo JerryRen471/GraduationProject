@@ -11,7 +11,7 @@ from Library.BasicFun import choose_device
 from Library.MathFun import series_sin_cos
 from Library.PhysModule import mag_from_states, mags_from_states, multi_mags_from_states, combined_mags, spin_operators, two_body_ob
 
-from Library.ADQC import ADQC_LatentGates
+from Library.ADQC import ADQC_LatentGates, Variational_Quantum_Circuit
 
 def split_time_series(data, length, device=None, dtype=tc.float32):
     samples, targets = list(), list()
@@ -113,7 +113,34 @@ def ADQC(para=None):
     qc.single_state = False  # 切换至多个态演化模式
     return qc
 
-def train(qc:ADQC_LatentGates, data:dict, para:dict):
+def VQC(para=None):
+    para0 = dict()  # 默认参数
+    para0['test_ratio'] = 0.2  # 将部分样本划为测试集
+    para0['length_in'] = 10  # 数据样本维数
+    para0['length_out'] = 10
+    para0['batch_size'] = 200  # 批次大小
+    para0['feature_map'] = 'cossin'  # 特征映射
+    para0['lattice'] = 'stair'  # ADQC链接形式（brick或stair）
+    para0['depth'] = 4  # ADQC层数
+    para0['ini_way'] = 'random'  # 线路初始化策略
+    para0['lr'] = 2e-3  # 初始学习率
+    para0['it_time'] = 1000  # 迭代次数
+    para0['print_time'] = 10  # 打印间隔
+    para0['device'] = 'cuda:0'
+    para0['dtype'] = tc.complex128
+
+    if para is None:
+        para = para0
+    else:
+        para = dict(para0, **para)  # 更新para参数
+    para['device'] = bf.choose_device(para['device'])
+
+    qc = Variational_Quantum_Circuit(lattice=para['lattice'], num_q=para['length_in'], depth=para['depth'], ini_way=para['ini_way'],
+                          device=para['device'], dtype=para['dtype'])
+    qc.single_state = False  # 切换至多个态演化模式
+    return qc
+
+def train(qc, data:dict, para:dict):
     """用data按照para的设定对qc进行训练
 
     返回的results是字典, 包含'train_pred', 'test_pred', 'train_loss', 'test_loss'

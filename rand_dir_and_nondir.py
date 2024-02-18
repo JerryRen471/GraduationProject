@@ -90,12 +90,14 @@ def Heisenberg_mul_states_evl(states, para=None):
     return states
 
 '''用循环生成n个[1, m]的随机张量和直接生成一个[n, m]的随机张量是一样的'''
-def rand_states(number:int, length:int, device=tc.device('cuda:0'))->tc.Tensor:
+def rand_states_(number:int, length:int, device=tc.device('cuda:0'))->tc.Tensor:
     number = int(number)
-    shape = [1, 2 ** length]
+    shape = [number, 2 ** length]
     states = tc.randn(shape, dtype=tc.complex128, device=device)
-    sigma = tc.rand([number,1], dtype=tc.complex128, device=device)*1
-    mu = tc.rand([number,1], dtype=tc.complex128, device=device)
+    sigma = tc.rand([number,1], dtype=tc.float64, device=device)
+    mu_real = (tc.rand([number,1], dtype=tc.float64, device=device)-0.5)*6
+    mu_img = (tc.rand([number,1], dtype=tc.float64, device=device)-0.5)*6
+    mu = tc.complex(mu_real, mu_img)
     # print('mu=',mu)
     states = states*sigma+mu
     shape_ = [number] + [2]*length
@@ -105,10 +107,10 @@ def rand_states(number:int, length:int, device=tc.device('cuda:0'))->tc.Tensor:
     states = states.reshape(shape_)
     return states
 
-def rand_states_(number:int, length:int, device=tc.device('cuda:0'))->tc.Tensor:
+def rand_states(number:int, length:int, device=tc.device('cuda:0'))->tc.Tensor:
     number = int(number)
     shape = [number, 2 ** length]
-    states = tc.rand(shape, dtype=tc.complex128, device=device)
+    states = tc.randn(shape, dtype=tc.complex128, device=device)
     shape_ = [number] + [2]*length
     norm = tc.sum(states * states.conj(), dim=1, keepdim=True)
     states = states / tc.sqrt(norm)
@@ -197,7 +199,7 @@ if __name__ == '__main__':
 
 
     import os
-    evol_mat_path = 'GraduationProject/Data/evol_mat'
+    evol_mat_path = 'GraduationProject/Data/evol_mat{:d}'.format(round(para['time_tot']/0.01))
     if os.access(evol_mat_path, os.F_OK):
         pass
     else:

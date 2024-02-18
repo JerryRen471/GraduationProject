@@ -448,6 +448,44 @@ class FCNN_ADQC_latent(ADQC_basic):
         return vecs
 
 
+class Variational_Quantum_Circuit(ADQC_basic):
+
+    def __init__(self, pos_one_layer=None, lattice='brick',
+                 num_q=10, depth=3, ini_way='random',
+                 device=None, dtype=tc.complex128):
+        super(Variational_Quantum_Circuit, self).__init__(
+            device=device, dtype=dtype)
+        self.lattice = lattice.lower()
+        self.depth = depth
+        self.ini_way = ini_way
+        if pos_one_layer is None:
+            self.pos = position_one_layer(self.lattice, num_q) # list of [pos1, pos2]
+        else:
+            self.pos = pos_one_layer
+
+        paras = None
+        R_poses = list(range(num_q))
+        for nd in range(depth):
+            for direction in ['x', 'y', 'z']:
+                self.add_Ri_gate(nd, R_poses, direction)
+            for ng in range(len(self.pos)):
+                name = self.lattice + '_layer' + str(nd) + '_CNOT' + str(ng)
+                gate = ADGate(
+                    'x', pos=self.pos[ng][1], pos_control=self.pos[ng][0], paras=paras,
+                    device=self.device, dtype=self.dtype)
+                self.layers.add_module(name, gate)
+
+    def add_Ri_gate(self, nd, R_poses, direction):
+        for R_pos in R_poses:
+            name = 'layer{:d}_R({}){:d}'.format(int(nd), direction, int(R_pos))
+            gate = ADGate(
+                            'rotate_'+direction, pos=R_pos, paras=None,
+                            device=self.device, dtype=self.dtype
+                        )
+            self.layers.add_module(name, gate)
+    pass
+
+
 def act_single_ADgate(state, gate):
     assert type(gate) is ADGate
     if type(state) is tc.Tensor:
