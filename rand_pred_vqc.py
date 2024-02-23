@@ -41,19 +41,22 @@ data = data.item()
 print(data['train_set'].dtype)
 
 qc = ADQC.VQC(para_adqc)
-qc, results_adqc, para_adqc = ADQC.train(qc, data, para_adqc)
-np.save(path+'/adqc_result_num{:d}'.format(args.train_num), results_adqc)
+# from torchsummary import summary
+# summary(qc, input_size=tuple(2 for _ in range(10)))
+print(qc)
+# qc, results_adqc, para_adqc = ADQC.train(qc, data, para_adqc)
+# np.save(path+'/adqc_result_num{:d}'.format(args.train_num), results_adqc)
 
 
-qc.single_state = False
-E = tc.eye(2**para_adqc['length_in'], dtype=tc.complex128, device=para_adqc['device'])
-shape_ = [E.shape[0]] + [2] * para_adqc['length_in']
-E = E.reshape(shape_)
-with tc.no_grad():
-    qc_mat = qc(E).reshape([E.shape[0], -1])
+# qc.single_state = False
+# E = tc.eye(2**para_adqc['length_in'], dtype=tc.complex128, device=para_adqc['device'])
+# shape_ = [E.shape[0]] + [2] * para_adqc['length_in']
+# E = E.reshape(shape_)
+# with tc.no_grad():
+#     qc_mat = qc(E).reshape([E.shape[0], -1])
 
-print('\nqc_mat.shape is', qc_mat.shape)
-np.save(path+'/qc_mat_num{:d}'.format(args.train_num), qc_mat.cpu())
+# print('\nqc_mat.shape is', qc_mat.shape)
+# np.save(path+'/qc_mat_num{:d}'.format(args.train_num), qc_mat.cpu())
 
 # A = tc.mm(qc_mat, qc_mat.T.conj())
 # print(A)

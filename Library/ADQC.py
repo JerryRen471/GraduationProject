@@ -465,13 +465,16 @@ class Variational_Quantum_Circuit(ADQC_basic):
 
         paras = None
         R_poses = list(range(num_q))
+        X_even = list(range(0, num_q, 2))
+        X_odd = list(range(1, num_q, 2))
+        X_poses = [X_even, X_odd]
         for nd in range(depth):
-            for direction in ['x', 'y', 'z']:
+            for direction in ['z', 'y', 'z']:
                 self.add_Ri_gate(nd, R_poses, direction)
-            for ng in range(len(self.pos)):
+            for ng in X_poses[nd%2]:
                 name = self.lattice + '_layer' + str(nd) + '_CNOT' + str(ng)
                 gate = ADGate(
-                    'x', pos=self.pos[ng][1], pos_control=self.pos[ng][0], paras=paras,
+                    'x', pos=ng+1, pos_control=ng, paras=paras,
                     device=self.device, dtype=self.dtype)
                 self.layers.add_module(name, gate)
 
