@@ -48,7 +48,7 @@ evol_mat = tc.from_numpy(evol_mat)
 # print('\nevol_mat.shape is', evol_mat.shape)
 
 # gate fidelity
-def gate_fidelity(E, U):
+def gate_fidelity(E:tc.Tensor, U:tc.Tensor):
     n = E.shape[0]
     trace = tc.einsum('aa', U.T.conj() @ E)
     gate_fidelity = 1/(n*(n+1))*(n + tc.abs(trace)**2)
