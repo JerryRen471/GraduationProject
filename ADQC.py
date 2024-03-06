@@ -67,6 +67,11 @@ def loss_complete_combined_mags(psi1:tc.Tensor, psi0:tc.Tensor):
     loss = tc.norm(diff)/sqrt(psi1.shape[0])
     return loss
 
+def loss_norm(psi1:tc.Tensor, psi0:tc.Tensor):
+    N = psi1.shape[0]
+    loss = 1/N * tc.norm(psi0 - psi1)**2
+    return loss
+
 def choose_loss(loss_type:str):
     if loss_type == 'fidelity':
         loss = loss_fid
@@ -82,8 +87,10 @@ def choose_loss(loss_type:str):
         loss = loss_combined_mags
     elif loss_type == 'complete':
         loss = loss_complete_combined_mags
+    elif loss_type == 'loss_norm':
+        loss = loss_norm
     else:
-        raise ValueError("the loss_type should be \'fidelity\', \'mag\', \'mags\', \'multi_mags\', \'log_multi_mags\', \'combined_mags\', \'complete\'")
+        raise ValueError("the loss_type should be \'fidelity\', \'mag\', \'mags\', \'multi_mags\', \'log_multi_mags\', \'combined_mags\', \'complete\', \'loss_norm\'")
     return loss
 
 def ADQC(para=None):
