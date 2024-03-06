@@ -83,26 +83,29 @@ for i in range(len(train_num_list)):
 
 # plot gate_fidelity between adqc and evolution matrix
 
-gate_fidelity_list = [[]]
-train_num_list = [[]]
-with open(data_path+'/gate_fidelity.txt', 'r') as f:
-    for line in f.readlines():
-        if line == '---\n':
-            train_num_list.append([])
-            gate_fidelity_list.append([])
-        else:
-            sim = float(line.split('\t')[0])
-            train_num = int(line.split('\t')[1])
-            gate_fidelity_list[-1].append(sim)
-            train_num_list[-1].append(train_num)
+def draw(data_path, pic_path, label, picname):
+    gate_fidelity_list = [[]]
+    train_num_list = [[]]
+    with open(data_path, 'r') as f:
+        for line in f.readlines():
+            if line == '---\n':
+                train_num_list.append([])
+                gate_fidelity_list.append([])
+            else:
+                sim = float(line.split('\t')[0])
+                train_num = int(line.split('\t')[1])
+                gate_fidelity_list[-1].append(sim)
+                train_num_list[-1].append(train_num)
 
-legend = []
-for i in range(len(train_num_list)):
-    plt.plot(train_num_list[i], gate_fidelity_list[i], marker='+', label='gate_fidelity')
+    legend = []
+    for i in range(len(train_num_list)):
+        plt.plot(train_num_list[i], gate_fidelity_list[i], marker='+', label='gate_fidelity')
 # plt.plot(x, test_fide, marker='x', label= 'test fidelity')
-    plt.legend()
-    plt.xlabel('train_num')
-    plt.ylabel('gate_fidelity')
-    plt.savefig(pic_path+'/{:d}diff_train_num_gate_fide.svg'.format(i))
-    plt.close()
+        plt.legend()
+        plt.xlabel('train_num')
+        plt.ylabel(label)
+        plt.savefig(pic_path+'/{:d}'.format(i)+picname)
+        plt.close()
 
+draw(data_path+'/gate_fidelity.txt', pic_path, label='gate_fidelity', picname='diff_train_num_gate_fide.svg')
+draw(data_path+'/similarity.txt', pic_path, label='similarity', picname='similarity_diff_train.svg')
