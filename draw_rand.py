@@ -4,13 +4,17 @@ from Library.BasicFun import mkdir
 from Library import PhysModule as phy
 from matplotlib import pyplot as plt
 
+tau = 0.01
+
 import argparse
 parser = argparse.ArgumentParser(description='manual to this script')
 # parser.add_argument('--seed', type=int, default=100)
 parser.add_argument('--folder', type=str, default='rand_init/')
 parser.add_argument('--train_num', type=int, default=100)
+parser.add_argument('--time_tot', type=float, default=1)
 args = parser.parse_args()
 train_num = args.train_num
+time_it = int(args.time_tot / tau)
 
 data_path = 'GraduationProject/Data'+args.folder
 pic_path = 'GraduationProject/pics'+args.folder
@@ -39,7 +43,7 @@ with open(data_path+'/fin_loss_train_num.txt', 'a') as f:
 
 qc_mat = np.load(data_path+'/qc_mat_num{:d}.npy'.format(args.train_num))
 qc_mat = tc.from_numpy(qc_mat)
-evol_mat = np.load('GraduationProject/Data/evol_mat.npy')
+evol_mat = np.load('GraduationProject/Data/evol_mat{:d}.npy'.format(time_it))
 evol_mat = tc.from_numpy(evol_mat)
 # print('\nevol_mat.shape is', evol_mat.shape)
 
@@ -49,38 +53,25 @@ def gate_fidelity(E, U):
     trace = tc.einsum('aa', U.T.conj() @ E)
     gate_fidelity = 1/(n*(n+1))*(n + tc.abs(trace)**2)
     return gate_fidelity
-
 gate_fidelity = gate_fidelity(qc_mat, evol_mat)
 with open(data_path+'/gate_fidelity.txt', 'a') as f:
     f.write("{:.6e}\t{:d}\n".format(gate_fidelity, train_num))
     pass
 
-'''
-# similarity
-x = tc.arange(0, 2*tc.pi, 0.1)
-# Vectorized calculation
-phases = tc.exp(tc.complex(tc.zeros(x.shape), x))
-qc_terms = qc_mat.cpu() * phases[:, None, None]
-difference_matrix = qc_terms - evol_mat
-term1 = tc.norm(difference_matrix, dim=(1, 2))
-term2 = tc.norm(evol_mat)
-similarity = 1- 0.5 * term1 / term2
-# for i in range(len(x)): # to be improved
-#     similarity[i] = (1 - 0.5*tc.norm(qc_mat.cpu()*tc.exp(tc.complex(0,x[i])) - evol_mat)/tc.norm(evol_mat))
-print('\nsimilarity with different phase is', similarity)
-
-try:
-    sim_mat = np.load(data_path+'/sim_mat.npy')
-    sim_mat = np.concatenate(sim_mat, similarity.numpy(), axis=0)
-except:
-    sim_mat = similarity.reshape((1, len(x))).numpy()
-
-np.save(data_path+'/sim_mat.npy', sim_mat)
-
-# with open(path+'/similarity_phase.txt', 'a') as f:
-#     f.write("{:.6e}\t{:d}\n".format(similarity, args.train_num))
-#     pass
-'''
+# gate similarity
+def similarity(E:tc.Tensor, U:tc.Tensor):
+    '''
+    E: circuit
+    U: real process
+    '''
+    a = tc.norm(E - U)
+    b = 2 * tc.norm(U)
+    s = 1 - a/b
+    return s
+similarity = similarity(qc_mat, evol_mat)
+with open(data_path+'/similarity.txt', 'a') as f:
+    f.write("{:.6e}\t{:d}\n".format(similarity, train_num))
+    pass
 
 legends = []
 plt.plot(x, train_loss, label='train loss')
