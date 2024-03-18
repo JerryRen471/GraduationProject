@@ -99,7 +99,7 @@ def draw(data_path, pic_path, label, picname):
 
     legend = []
     for i in range(len(train_num_list)):
-        plt.plot(train_num_list[i], gate_fidelity_list[i], marker='+', label='gate_fidelity')
+        plt.plot(train_num_list[i], gate_fidelity_list[i], marker='+')
 # plt.plot(x, test_fide, marker='x', label= 'test fidelity')
         plt.legend()
         plt.xlabel('train_num')
