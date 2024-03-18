@@ -76,11 +76,7 @@ class ADGate(nn.Module):
                 if qudit_dims is None:
                     qudit_dims = [2] * ndim
                 dim_t = math.prod(qudit_dims)
-                if 'initial_way_latent' in self.settings:
-                    if self.settings['initial_way_latent'] == 'identity':
-                        self.paras = tc.eye(dim_t, dim_t) + 1e-5 * tc.randn((dim_t, dim_t))
-                else:
-                    self.paras = tc.randn((dim_t, dim_t))
+                self.paras = tc.randn((dim_t, dim_t))
             self.paras = self.paras.to(device=self.device, dtype=self.dtype)
         elif self.name == 'arbitrary':  # 无限制门（paras即门）
             assert type(paras) is tc.Tensor
@@ -272,8 +268,10 @@ class ADQC_LatentGates(ADQC_basic):
         for nd in range(depth):
             for ng in range(len(self.pos)):
                 if self.ini_way == 'identity':
-                    paras = tc.randn((4, 4)) * 1e-8 + tc.eye(4, 4)
+                    paras = tc.randn((4, 4)) * 1e-5 + tc.eye(4, 4)
                     paras = paras.to(device=self.device, dtype=self.dtype)
+                elif self.ini_way == 'random':
+                    paras = tc.randn((4, 4))
                 name = self.lattice + '_layer' + str(nd) + '_gate' + str(ng)
                 gate = ADGate(
                     'latent', pos=self.pos[ng], paras=paras,
@@ -463,7 +461,6 @@ class Variational_Quantum_Circuit(ADQC_basic):
         else:
             self.pos = pos_one_layer
 
-        paras = None
         R_poses = list(range(num_q))
         X_even = list(range(0, num_q, 2))
         X_odd = list(range(1, num_q-1, 2))
@@ -474,19 +471,20 @@ class Variational_Quantum_Circuit(ADQC_basic):
             for ng in X_poses[nd%2]:
                 name = self.lattice + '_layer' + str(nd) + '_CNOT' + str(ng)
                 gate = ADGate(
-                    'x', pos=ng+1, pos_control=ng, paras=paras,
+                    'x', pos=ng+1, pos_control=ng,
                     device=self.device, dtype=self.dtype)
                 self.layers.add_module(name, gate)
 
-    def add_Ri_gate(self, nd, R_poses, direction):
+    def add_Ri_gate(self, nd, R_poses, direction, ini_way='identity'):
+        '''Add parameterized rotation gate initialized near the identity matrix to the module'''
         for R_pos in R_poses:
             name = 'layer{:d}_R({}){:d}'.format(int(nd), direction, int(R_pos))
+            para = tc.randn(1)*0.01 if ini_way=='identity' else tc.randn(1)
             gate = ADGate(
-                            'rotate_'+direction[0], pos=R_pos, paras=None,
+                            'rotate_'+direction[0], pos=R_pos, paras=para,
                             device=self.device, dtype=self.dtype
                         )
             self.layers.add_module(name, gate)
-    pass
 
 
 def act_single_ADgate(state, gate):

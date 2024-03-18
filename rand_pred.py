@@ -33,6 +33,7 @@ args = parser.parse_args()
 # para_adqc['folder'] = args.folder
 # para_adqc['seed'] = args.seed
 para_adqc['loss_type'] = args.loss_type
+para_adqc['ini_way'] = 'identity'
 path = 'GraduationProject/Data'+args.folder
 mkdir(path)
 data = np.load(path+'/data_num{:d}.npy'.format(args.train_num), allow_pickle=True)
