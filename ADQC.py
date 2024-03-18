@@ -41,6 +41,13 @@ def loss_mags(psi1:tc.Tensor, psi0:tc.Tensor):
     loss = tc.norm(mags_diff)/sqrt(psi0.shape[1]*psi1.shape[0])
     return loss
 
+def loss_zx_mags(psi1:tc.Tensor, psi0:tc.Tensor):
+    op = spin_operators('half', device=psi1.device)
+    spins = [op['sx'], op['sz']]
+    multi_mags_diff = multi_mags_from_states(psi1, spins, device=psi1.device) - multi_mags_from_states(psi0, spins, device=psi1.device)
+    loss = tc.norm(multi_mags_diff)/sqrt(psi0.shape[1]*psi1.shape[0])
+    return loss
+
 def loss_multi_mags(psi1:tc.Tensor, psi0:tc.Tensor):
     op = spin_operators('half', device=psi1.device)
     spins = [op['sx'], op['sy'], op['sz']]
@@ -79,6 +86,8 @@ def choose_loss(loss_type:str):
         loss = loss_average_mag
     elif loss_type == 'mags':
         loss = loss_mags
+    elif loss_type == 'xz_mags':
+        loss = loss_zx_mags
     elif loss_type == 'multi_mags':
         loss = loss_multi_mags
     elif loss_type == 'log_multi_mags':
@@ -253,6 +262,7 @@ if __name__ == '__main__':
     # 通用参数
     para = {'lr': 1e-2,  # 初始学习率
             'length_tot': 500,  # 序列总长度
+            'ini_way': 'identity',
             'order': 10,  # 生成序列的傅里叶阶数
             'length': 1,  # 每个样本长度
             'batch_size': 2000,  # batch大小
