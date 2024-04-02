@@ -61,21 +61,12 @@ def rand_states(number:int, length:int, device=tc.device('cuda:0'))->tc.Tensor:
     states = states.reshape(shape_)
     return states
 
-para = dict()
-para['length'] = 3
-para['dtype'] = tc.complex128
-one = tc.eye(2**para['length'], dtype=para['dtype'], device=tc.device('cpu'))
-one = one.reshape([2**para['length']]+[2]*para['length'])
-print(one)
-states = rand_states(1, 3, device=tc.device('cpu'))
-# print(tc.norm(states)**2)
-gates = n_body_unitaries(2, 3, 1, one.dtype)
-evol_mat = n_body_evol_states(one, gates)
-evol_mat = evol_mat.reshape(evol_mat.shape[0], -1).T
-new_states_1 = n_body_evol_states(states, gates)
-new_states_1 = new_states_1.reshape(new_states_1.shape[0], -1)
-states_ = states.reshape(states.shape[0], -1)
-new_states_2 = tc.einsum('ij,nj->ni', evol_mat, states_)
-print(new_states_1 - new_states_2)
-print(tc.einsum('ij,ij->i', new_states_1, new_states_2.conj()))
-print(new_states_1 == new_states_2)
+def rand_id(shape, dim, dtype, device):
+    id = tc.eye(dim, dtype=dtype, device=device)
+    for n in reversed(shape):
+        id = tc.stack(list(id for _ in range(n)))
+    return id
+
+A = rand_id(shape=[2,3], dim=4, dtype=tc.complex64, device=tc.device('cpu'))
+print(A.shape)
+print(A[0])
