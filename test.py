@@ -35,15 +35,15 @@ def n_body_unitaries(n:int, l:int, d:int, dtype:tc.dtype):
     shape = [d, l-n+1]+[2]*n+[2]*n
     return gates_di.reshape(shape)
 
-def n_body_evol_states(states, n:int, d:int):
+def n_body_evol_states(states, gates):
     '''
     states.shape is [N] + [2]*l
     gates.shape is [d, m] + [2]*l + [2]*l (m = l-n+1)
     '''
     l = len(states.shape)-1
-    m = l-n+1
-    dtype = states.dtype
-    gates = n_body_unitaries(n, l, d, dtype)
+    d = gates.shape[0]
+    m = gates.shape[1]
+    n = l-m+1
     which_where = list()
     for i in range(m):
         which_where.append([i]+list(range(i, i+n)))
@@ -61,8 +61,21 @@ def rand_states(number:int, length:int, device=tc.device('cuda:0'))->tc.Tensor:
     states = states.reshape(shape_)
     return states
 
-states = rand_states(3, 4, device=tc.device('cpu'))
-print(tc.norm(states)**2)
-new_states = n_body_evol_states(states, n=3, d=2)
-print(new_states.shape)
-print(tc.norm(new_states)**2)
+para = dict()
+para['length'] = 3
+para['dtype'] = tc.complex128
+one = tc.eye(2**para['length'], dtype=para['dtype'], device=tc.device('cpu'))
+one = one.reshape([2**para['length']]+[2]*para['length'])
+print(one)
+states = rand_states(1, 3, device=tc.device('cpu'))
+# print(tc.norm(states)**2)
+gates = n_body_unitaries(2, 3, 1, one.dtype)
+evol_mat = n_body_evol_states(one, gates)
+evol_mat = evol_mat.reshape(evol_mat.shape[0], -1).T
+new_states_1 = n_body_evol_states(states, gates)
+new_states_1 = new_states_1.reshape(new_states_1.shape[0], -1)
+states_ = states.reshape(states.shape[0], -1)
+new_states_2 = tc.einsum('ij,nj->ni', evol_mat, states_)
+print(new_states_1 - new_states_2)
+print(tc.einsum('ij,ij->i', new_states_1, new_states_2.conj()))
+print(new_states_1 == new_states_2)
