@@ -305,3 +305,9 @@ def process_fide(U1:tc.Tensor, U0:tc.Tensor):
     n = U0.shape[0]
     f = 1/(n*(n+1)) * (n + tc.abs(tc.einsum('ii->',M))**2)
     return f
+
+def rand_id(shape, dim, dtype, device):
+    id = tc.eye(dim, dtype=dtype, device=device)
+    for n in reversed(shape):
+        id = tc.stack(list(id for _ in range(n)))
+    return id
