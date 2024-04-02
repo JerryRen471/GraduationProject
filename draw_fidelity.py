@@ -7,7 +7,7 @@ import argparse
 import numpy as np
 parser = argparse.ArgumentParser(description='manual to this script')
 # parser.add_argument('--seed', type=int, default=100)
-parser.add_argument('--folder', type=str, default='/loss_multi_mags/dn')
+parser.add_argument('--folder', type=str, default="/rand_unitary/loss_mags/dn")
 args = parser.parse_args()
 
 data_path = 'GraduationProject/Data'+args.folder
@@ -101,7 +101,6 @@ def draw(data_path, pic_path, label, picname):
     for i in range(len(train_num_list)):
         plt.plot(train_num_list[i], gate_fidelity_list[i], marker='+')
 # plt.plot(x, test_fide, marker='x', label= 'test fidelity')
-        plt.legend()
         plt.xlabel('train_num')
         plt.ylabel(label)
         plt.savefig(pic_path+'/{:d}'.format(i)+picname)
