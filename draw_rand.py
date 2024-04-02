@@ -4,20 +4,18 @@ from Library.BasicFun import mkdir
 from Library import PhysModule as phy
 from matplotlib import pyplot as plt
 
-tau = 0.01
-
 import argparse
 parser = argparse.ArgumentParser(description='manual to this script')
 # parser.add_argument('--seed', type=int, default=100)
 parser.add_argument('--folder', type=str, default='rand_init/')
 parser.add_argument('--train_num', type=int, default=100)
-parser.add_argument('--time_tot', type=float, default=1)
+parser.add_argument('--evol_mat_path', type=str, default="GraduationProject/Data/evol_mat.npy")
 args = parser.parse_args()
 train_num = args.train_num
-time_it = int(args.time_tot / tau)
 
 data_path = 'GraduationProject/Data'+args.folder
 pic_path = 'GraduationProject/pics'+args.folder
+evol_mat_path = args.evol_mat_path
 mkdir(data_path)
 mkdir(pic_path)
 
@@ -43,7 +41,7 @@ with open(data_path+'/fin_loss_train_num.txt', 'a') as f:
 
 qc_mat = np.load(data_path+'/qc_mat_num{:d}.npy'.format(args.train_num))
 qc_mat = tc.from_numpy(qc_mat)
-evol_mat = np.load('GraduationProject/Data/evol_mat{:d}.npy'.format(time_it))
+evol_mat = np.load(evol_mat_path)
 evol_mat = tc.from_numpy(evol_mat)
 # print('\nevol_mat.shape is', evol_mat.shape)
 
@@ -98,3 +96,4 @@ plt.close()
 # plt.ylabel('gate_fidelity')
 # plt.savefig(pic_path+'/gate_fidelity_num{:d}.svg'.format(args.train_num))
 # plt.close()
+
