@@ -268,7 +268,7 @@ class ADQC_LatentGates(ADQC_basic):
         for nd in range(depth):
             for ng in range(len(self.pos)):
                 if self.ini_way == 'identity':
-                    paras = tc.randn((4, 4)) * 1e-5 + tc.eye(4, 4)
+                    paras = tc.randn((4, 4)) * 1e-2 + tc.eye(4, 4)
                     paras = paras.to(device=self.device, dtype=self.dtype)
                 elif self.ini_way == 'random':
                     paras = tc.randn((4, 4))
@@ -467,7 +467,7 @@ class Variational_Quantum_Circuit(ADQC_basic):
         X_poses = [X_even, X_odd]
         for nd in range(depth):
             for direction in ['z1', 'y', 'z2']:
-                self.add_Ri_gate(nd, R_poses, direction)
+                self.add_Ri_gate(nd, R_poses, direction, ini_way=self.ini_way)
             for ng in X_poses[nd%2]:
                 name = self.lattice + '_layer' + str(nd) + '_CNOT' + str(ng)
                 gate = ADGate(
