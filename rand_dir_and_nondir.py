@@ -166,6 +166,13 @@ def gen_select(gen_type:str):
     #     print('-'*10+'\nArgument --gen_type must be the combination of \'n\' and \'d\'!\n'+'-'*10)
     return gen
 
+def random_uni_evl(data, evol_mat):
+    shape_ = data.shape
+    data = data.reshape([shape_[0], -1])
+    labels = tc.einsum('ij,ai->aj', evol_mat, data)
+    labels = labels.reshape(shape_)
+    return labels
+
 if __name__ == '__main__':
     length = 10
     spin = 'half'
@@ -185,6 +192,7 @@ if __name__ == '__main__':
     parser.add_argument('--train_num', type=int, default=100)
     parser.add_argument('--test_num', type=int, default=500)
     parser.add_argument('--folder', type=str, default='mixed_rand_states/')
+    parser.add_argument('--evol_mat_path', type=str, default="GraduationProject/Data/evol_mat.npy")
     parser.add_argument('--gen_type', type=str, default='nn')
     parser.add_argument('--time_tot', type=float, default=0.01)
     args = parser.parse_args()
@@ -204,29 +212,15 @@ if __name__ == '__main__':
 
     if para['seed'] != None:
         tc.manual_seed(para['seed'])
-    gen_train = gen_select(args.gen_type[0])
-    trainset = gen_train(args.train_num, length, device=para['device'])
-    print(trainset.dtype)
-    train_lbs = Heisenberg_mul_states_evl(trainset, para)
-
-    gen_test = gen_select(args.gen_type[1])
-    testset = gen_test(args.test_num, length, device=para['device'])
-    test_lbs = Heisenberg_mul_states_evl(testset, para)
-    data = dict()
-    data['train_set'] = trainset
-    data['train_lbs'] = train_lbs
-    data['test_set'] = testset
-    data['test_lbs'] = test_lbs
 
     path = 'GraduationProject/Data'+para['folder']
     mkdir(path)
-    np.save(path+'/data_num{:d}'.format(args.train_num), data)
-
 
     import os
-    evol_mat_path = 'GraduationProject/Data/evol_mat{:d}'.format(round(para['time_tot']/0.01))
+    evol_mat_path = args.evol_mat_path
     if os.access(evol_mat_path, os.F_OK):
-        pass
+        evol_mat = np.load(evol_mat_path, allow_pickle=True)
+        evol_mat = tc.from_numpy(evol_mat).cuda()
     else:
         E = tc.eye(2**para['length'], dtype=tc.complex128, device=para['device'])
         shape_ = [E.shape[0]] + [2] * para['length']
@@ -234,3 +228,20 @@ if __name__ == '__main__':
         evol_mat = Heisenberg_mul_states_evl(E, para).reshape(E.shape[0], -1)
         print('evol_mat.shape is', evol_mat.shape)
         np.save(evol_mat_path, evol_mat.cpu())
+
+    gen_train = gen_select(args.gen_type[0])
+    trainset = gen_train(args.train_num, length, device=para['device'])
+    print(trainset.dtype)
+    train_lbs = random_uni_evl(trainset, evol_mat)
+
+    gen_test = gen_select(args.gen_type[1])
+    testset = gen_test(args.test_num, length, device=para['device'])
+    test_lbs = random_uni_evl(testset, evol_mat)
+    data = dict()
+    data['train_set'] = trainset
+    data['train_lbs'] = train_lbs
+    data['test_set'] = testset
+    data['test_lbs'] = test_lbs
+
+    
+    np.save(path+'/data_num{:d}'.format(args.train_num), data)
