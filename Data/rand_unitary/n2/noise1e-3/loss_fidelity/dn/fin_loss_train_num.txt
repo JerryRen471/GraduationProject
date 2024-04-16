@@ -28,3 +28,34 @@ train_fide:9.9998e-01	test_fide:9.9970e-01
 train_num=100
 train_loss:1.6075e-05	test_loss:1.2979e-05
 train_fide:9.9998e-01	test_fide:9.9999e-01
+---
+train_num=10
+train_loss:1.0978e-05	test_loss:5.9783e-04
+train_fide:9.9999e-01	test_fide:9.9940e-01
+train_num=20
+train_loss:2.4498e-06	test_loss:9.5760e-05
+train_fide:1.0000e+00	test_fide:9.9990e-01
+train_num=30
+train_loss:4.2489e-07	test_loss:8.4772e-06
+train_fide:1.0000e+00	test_fide:9.9999e-01
+train_num=40
+train_loss:7.6189e-07	test_loss:1.7844e-06
+train_fide:1.0000e+00	test_fide:1.0000e+00
+train_num=50
+train_loss:9.3176e-06	test_loss:6.0795e-06
+train_fide:9.9999e-01	test_fide:9.9999e-01
+train_num=60
+train_loss:1.0086e-04	test_loss:1.0378e-04
+train_fide:9.9990e-01	test_fide:9.9990e-01
+train_num=70
+train_loss:9.2880e-08	test_loss:2.1719e-07
+train_fide:1.0000e+00	test_fide:1.0000e+00
+train_num=80
+train_loss:2.2756e-05	test_loss:4.7485e-06
+train_fide:9.9998e-01	test_fide:1.0000e+00
+train_num=90
+train_loss:2.0952e-06	test_loss:1.0971e-05
+train_fide:1.0000e+00	test_fide:9.9999e-01
+train_num=100
+train_loss:7.5642e-07	test_loss:4.2093e-06
+train_fide:1.0000e+00	test_fide:1.0000e+00
