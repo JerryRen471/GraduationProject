@@ -130,6 +130,13 @@ def Haar_rand_states(number:int, length:int, device=tc.device('cuda:0'))->tc.Ten
     states = states.reshape(shape_)
     return states
 
+def Haar_random_product_states(number:int, length:int, device=tc.device('cuda:0'))->tc.Tensor:
+    product_states = Haar_rand_states(number, 1, device=device)
+    for _ in range(length-1):
+        temp = Haar_rand_states(number, 1, device=device)
+        product_states = tc.einsum("n...i,nj->n...ij", product_states, temp)
+    return product_states
+
 def rand_states(number:int, length:int, device=tc.device('cuda:0'))->tc.Tensor:
     number = int(number)
     shape = [number, 2 ** length]
@@ -160,7 +167,7 @@ def gen_select(gen_type:str):
     elif gen_type == 'n':
         gen = rand_states
     elif gen_type == 'h':
-        gen = Haar_rand_states
+        gen = Haar_random_product_states
     # else:
     #     gen = None
     #     print('-'*10+'\nArgument --gen_type must be the combination of \'n\' and \'d\'!\n'+'-'*10)
@@ -227,7 +234,7 @@ if __name__ == '__main__':
         E = E.reshape(shape_)
         evol_mat = Heisenberg_mul_states_evl(E, para).reshape(E.shape[0], -1)
         print('evol_mat.shape is', evol_mat.shape)
-        np.save(evol_mat_path, evol_mat.cpu())
+        np.save(evol_mat_path, evol_mat.cpu().T)
 
     gen_train = gen_select(args.gen_type[0])
     trainset = gen_train(args.train_num, length, device=para['device'])
