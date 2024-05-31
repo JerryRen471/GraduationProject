@@ -10,6 +10,7 @@ parser = argparse.ArgumentParser(description='manual to this script')
 parser.add_argument('--folder', type=str, default='rand_init/')
 parser.add_argument('--train_num', type=int, default=100)
 parser.add_argument('--evol_mat_path', type=str, default="GraduationProject/Data/evol_mat.npy")
+# parser.add_argument('--time_it', type=int, default="GraduationProject/Data/evol_mat.npy")
 args = parser.parse_args()
 train_num = args.train_num
 
@@ -43,7 +44,8 @@ qc_mat = np.load(data_path+'/qc_mat_num{:d}.npy'.format(args.train_num))
 qc_mat = tc.from_numpy(qc_mat)
 evol_mat = np.load(evol_mat_path)
 evol_mat = tc.from_numpy(evol_mat)
-# print('\nevol_mat.shape is', evol_mat.shape)
+print('\nevol_mat.shape is', evol_mat.shape)
+print('\nqc_mat.shape is', qc_mat.shape)
 
 # gate fidelity
 def gate_fidelity(E:tc.Tensor, U:tc.Tensor):
@@ -71,6 +73,15 @@ with open(data_path+'/similarity.txt', 'a') as f:
     f.write("{:.6e}\t{:d}\n".format(similarity, train_num))
     pass
 
+def spectrum(mat:tc.Tensor):
+    energy = tc.log(tc.linalg.eigvals(mat))/1.j
+    energy = energy.real
+    energy, ind = tc.sort(energy)
+    return energy
+    
+qc_energy = spectrum(qc_mat)
+evol_energy = spectrum(evol_mat)
+
 legends = []
 plt.plot(x, train_loss, label='train loss')
 plt.plot(x, test_loss, label= 'test loss')
@@ -88,6 +99,16 @@ plt.xlabel('epochs')
 plt.ylabel('fidelity')
 plt.savefig(pic_path+'/fidelity_num{:d}.svg'.format(args.train_num))
 plt.close()
+
+legends = []
+plt.plot(qc_energy, label='qc')
+plt.plot(evol_energy, label='Trotter')
+plt.legend()
+plt.xlabel('n')
+plt.ylabel('E*t')
+plt.savefig(pic_path+'/spectrum_num{:d}.svg'.format(args.train_num))
+plt.close()
+
 
 # legends = []
 # plt.plot(x, gate_fidelity, label='gate_fidelity')
