@@ -60,7 +60,7 @@ def n_body_evol_states(states, gates):
 def random_uni_evl(data, evol_mat):
     shape_ = data.shape
     data = data.reshape([shape_[0], -1])
-    labels = tc.einsum('ij,ai->aj', evol_mat, data)
+    labels = tc.einsum('ij,aj->ai', evol_mat, data)
     labels = labels.reshape(shape_)
     return labels
 
@@ -185,7 +185,7 @@ if __name__ == '__main__':
         one = one.reshape([2**para['length']]+[2]*para['length'])
         evol_mat = n_body_evol_states(one, gates)
         evol_mat = evol_mat.reshape([2**para['length'], 2**para['length']])
-        np.save(evol_mat_path, evol_mat.cpu())
+        np.save(evol_mat_path, evol_mat.cpu().T)
 
     if para['seed'] != None:
         tc.manual_seed(para['seed'])
