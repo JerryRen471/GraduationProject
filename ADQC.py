@@ -111,7 +111,7 @@ def ADQC(para=None):
     para0['feature_map'] = 'cossin'  # 特征映射
     para0['lattice'] = 'brick'  # ADQC链接形式（brick或stair）
     para0['depth'] = 4  # ADQC层数
-    para0['ini_way'] = 'random'  # 线路初始化策略
+    para0['ini_way'] = 'identity'  # 线路初始化策略
     para0['lr'] = 2e-3  # 初始学习率
     para0['it_time'] = 1000  # 迭代次数
     para0['print_time'] = 10  # 打印间隔
@@ -170,11 +170,12 @@ def train(qc, data:dict, para:dict):
     para0['lattice'] = 'brick'  # ADQC链接形式（brick或stair）
     para0['depth'] = 4  # ADQC层数
     para0['ini_way'] = 'random'  # 线路初始化策略
-    para0['lr'] = 2e-3  # 初始学习率
+    para0['lr'] = 2e-2  # 初始学习率
     para0['it_time'] = 1000  # 迭代次数
     para0['print_time'] = 10  # 打印间隔
     para0['device'] = 'cuda:0'
     para0['dtype'] = tc.complex128
+    para0['recurrent_time'] = 1
     if para is None:
         para = para0
     else:
@@ -208,7 +209,9 @@ def train(qc, data:dict, para:dict):
         test_batches = 0
         for n, (samples, lbs) in enumerate(trainloader):
             psi0 = samples
-            psi1 = qc(psi0)
+            for _ in range(para['recurrent_time']):
+                psi0 = qc(psi0)
+            psi1 = psi0
             loss = loss_fun(psi1, lbs)
             loss.backward()
             optimizer.step()
@@ -227,7 +230,9 @@ def train(qc, data:dict, para:dict):
             with tc.no_grad():
                 for n, (samples, lbs) in enumerate(testloader):
                     psi0 = samples
-                    psi1 = qc(psi0)
+                    for _ in range(para['recurrent_time']):
+                        psi0 = qc(psi0)
+                    psi1 = psi0
                     loss = loss_fun(psi1, lbs)
                     loss_tmp += loss.item()
                     fide = fidelity(psi1, lbs)
@@ -242,13 +247,15 @@ def train(qc, data:dict, para:dict):
     with tc.no_grad():
         results = dict()
         psi0 = trainset
-        psi1 = qc(psi0)
-        output = psi1
+        for _ in range(para['recurrent_time']):
+            psi0 = qc(psi0)
+        output = psi0
         output = output.data.to(device=data['train_set'].device)
         results['train_pred'] = output
         psi0 = testset
-        psi1 = qc(psi0)
-        output1 = psi1
+        for _ in range(para['recurrent_time']):
+            psi0 = qc(psi0)
+        output1 = psi0
         output1 = output1.data.to(device=data['test_set'].device)
         results['test_pred'] = output1
         results['train_loss'] = loss_train_rec
