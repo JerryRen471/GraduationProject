@@ -108,3 +108,4 @@ def draw(data_path, pic_path, label, picname):
 
 draw(data_path+'/gate_fidelity.txt', pic_path, label='gate_fidelity', picname='diff_train_num_gate_fide.svg')
 draw(data_path+'/similarity.txt', pic_path, label='similarity', picname='similarity_diff_train.svg')
+draw(data_path+'/spectrum_diff.txt', pic_path, label='spectrum_diff', picname='spectrum_diff.svg')

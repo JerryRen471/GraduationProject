@@ -1,4 +1,5 @@
 from cProfile import label
+from matplotlib import pyplot as plt
 import torch as tc
 import numpy as np
 from Library.BasicFun import mkdir
@@ -41,7 +42,7 @@ def Heisenberg_mul_states_evl(states, para=None):
     para_def['length'] = 10
     para_def['spin'] = 'half'
     para_def['BC'] = 'open'
-    para_def['time_tot'] = 50*2
+    para_def['time_tot'] = 1
     para_def['tau'] = 0.01
     para_def['print_time'] = para_def['time_tot']
     para_def['hl'] = 2
@@ -52,6 +53,7 @@ def Heisenberg_mul_states_evl(states, para=None):
     para = dict(para_def, **para)
     para['d'] = phy.from_spin2phys_dim(para['spin'])
     para['time_it'] = round(para['time_tot'] / para['tau'])
+    para['print_time'] = para['print_time'] // para['tau']
     para['device'] = bf.choose_device(para['device'])
     # print(para)
 
@@ -188,7 +190,7 @@ def label_generate(data, para):
     return merge(input), merge(label)
 
 if __name__ == '__main__':
-    length = 10
+    # length = 14
     spin = 'half'
     d = phy.from_spin2phys_dim(spin)
     device = tc.device('cuda:0')
@@ -196,71 +198,92 @@ if __name__ == '__main__':
 
     import argparse
     parser = argparse.ArgumentParser(description='manual to this script')
-    parser.add_argument('--n', type=int, default=3)
+    parser.add_argument('--length', type=int, default=10)
     parser.add_argument('--Jx', type=float, default=1)
     parser.add_argument('--Jy', type=float, default=0)
     parser.add_argument('--Jz', type=float, default=1)
     parser.add_argument('--hx', type=float, default=0.5)
     parser.add_argument('--hl', type=float, default=2)
     parser.add_argument('--seed', type=int, default=None)
-    parser.add_argument('--train_num', type=int, default=100)
+    parser.add_argument('--sample_num', type=int, default=1)
+    parser.add_argument('--evol_num', type=int, default=10)
     parser.add_argument('--test_num', type=int, default=500)
     parser.add_argument('--folder', type=str, default='mixed_rand_states/')
     parser.add_argument('--evol_mat_path', type=str, default="GraduationProject/Data/evol_mat.npy")
     parser.add_argument('--gen_type', type=str, default='nn')
-    parser.add_argument('--time_tot', type=float, default=0.01)
+    parser.add_argument('--time_interval', type=float, default=0.01)
     parser.add_argument('--tau', type=float, default=0.01)
     args = parser.parse_args()
 
     para = dict()
-    para['length'] = length
+    para['length'] = args.length
+    para['device'] = device
+    para['gen_type'] = args.gen_type
     para['spin'] = 'half'
     para['d'] = d
-    para['device'] = device
     para['dtype'] = dtype
     para['J'] = [args.Jx, args.Jy, args.Jz]
     para['h'] = [args.hx, 0, 0]
-    para['print_time'] = args.time_tot*100
-    para['time_tot'] = args.time_tot*args.train_num
     para['hl'] = args.hl
-    para['folder'] = args.folder
-    para['seed'] = args.seed
-    para['train_num'] = args.train_num
-    para['test_num'] = args.test_num
-    para['gen_type'] = args.gen_type
 
-    if para['seed'] != None:
-        tc.manual_seed(para['seed'])
+    if args.seed != None:
+        tc.manual_seed(args.seed)
 
-    path = 'GraduationProject/Data'+para['folder']
+    path = 'GraduationProject/Data'+args.folder
     mkdir(path)
     para_evol = dict(para)
-    para_evol['time_tot'] = args.time_tot
+    para_evol['time_tot'] = args.time_interval
+    para_evol['print_time'] = args.time_interval
+
+    para_train = dict(para)
+    para_train['time_tot'] = args.time_interval*args.evol_num
+    para_train['print_time'] = args.time_interval
+    para_train['sample_num'] = args.sample_num
+
+    para_test = dict(para)
+    para_test['time_tot'] = args.time_interval
+    para_test['print_time'] = args.time_interval
+    para_test['sample_num'] = args.sample_num
 
     import os
     evol_mat_path = args.evol_mat_path
-    if os.access(evol_mat_path, os.F_OK):
-        evol_mat = np.load(evol_mat_path, allow_pickle=True)
-        evol_mat = tc.from_numpy(evol_mat).cuda()
-    else:
-        E = tc.eye(2**para['length'], dtype=tc.complex128, device=para['device'])
-        shape_ = [E.shape[0]] + [2] * para['length']
-        E = E.reshape(shape_)
-        evol_mat = Heisenberg_mul_states_evl(E, para_evol).reshape(E.shape[0], -1)
-        print('evol_mat.shape is', evol_mat.shape)
-        np.save(evol_mat_path, evol_mat.cpu().T)
+    # if os.access(evol_mat_path, os.F_OK):
+    #     pass
+    # else:
+    E = tc.eye(2**para['length'], dtype=tc.complex128, device=para['device'])
+    shape_ = [E.shape[0]] + [2] * para['length']
+    E = E.reshape(shape_)
+    evol_mat = Heisenberg_mul_states_evl(E, para_evol).reshape(E.shape[0], -1)
+    print('evol_mat.shape is', evol_mat.shape)
+    np.save(evol_mat_path, evol_mat.cpu().T)
 
     gen_train = gen_select(para['gen_type'][0])
-    trainset = gen_train(1, para['length'], device=para['device'])
-    trainset, train_lbs = label_generate(trainset, para)
+    trainset = gen_train(args.sample_num, para['length'], device=para['device'])
+    trainset, train_lbs = label_generate(trainset, para_train)
 
     gen_test = gen_select(para['gen_type'][1])
     testset = gen_train(1, para['length'], device=para['device'])
-    testset, test_lbs = label_generate(testset, para)
+    testset, test_lbs = label_generate(testset, para_test)
     data = dict()
     data['train_set'] = trainset
     data['train_lbs'] = train_lbs
     data['test_set'] = testset
     data['test_lbs'] = test_lbs
     
-    np.save(path+'/data_num{:d}'.format(args.train_num), data)
+    np.save(path+'/train_set_sample_{:d}_evol_{:d}'.format(args.sample_num, args.evol_num), data)
+
+    from Library.PhysModule import multi_mags_from_states
+    multi_mags = multi_mags_from_states(trainset)
+    print(multi_mags.shape)
+    s_label = 'xyz'
+    for i in range(multi_mags.shape[2]):
+        time_it = multi_mags.shape[0]
+        x = np.array([_ for _ in range(time_it)]) * args.interval
+        for j in range(3):
+            y = np.array(multi_mags.cpu()[:, j, i], label='s'+s_label[j])
+            plt.plot(x, y)
+        plt.legend()
+        plt.xlabel('t')
+        plt.ylabel('si')
+        plt.title(f'Average magnetic moment on site {i}')
+        plt.savefig('GraduationProject/pics'+args.folder+f'AverageMagneticMoment{i}.svg')

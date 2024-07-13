@@ -1,18 +1,63 @@
+import os
 import torch as tc
 import numpy as np
 from Library.BasicFun import mkdir
 from Library import PhysModule as phy
 from matplotlib import pyplot as plt
+import pandas as pd
 
 import argparse
 parser = argparse.ArgumentParser(description='manual to this script')
 # parser.add_argument('--seed', type=int, default=100)
+parser.add_argument('--length', type=int, default=10)
+parser.add_argument('--Jx', type=float, default=1)
+parser.add_argument('--Jy', type=float, default=0)
+parser.add_argument('--Jz', type=float, default=1)
+parser.add_argument('--hx', type=float, default=0.5)
+parser.add_argument('--hl', type=float, default=2)
+parser.add_argument('--time_interval', type=float, default=0.01)
+parser.add_argument('--sample_num', type=int, default=1)
+parser.add_argument('--evol_num', type=int, default=10)
+parser.add_argument('--gen_type', type=str, default='nn')
+parser.add_argument('--loss_type', type=str, default='multi_mags')
 parser.add_argument('--folder', type=str, default='rand_init/')
-parser.add_argument('--train_num', type=int, default=100)
 parser.add_argument('--evol_mat_path', type=str, default="GraduationProject/Data/evol_mat.npy")
 # parser.add_argument('--time_it', type=int, default="GraduationProject/Data/evol_mat.npy")
 args = parser.parse_args()
-train_num = args.train_num
+evol_num = args.evol_num
+
+def write_to_csv(length, Jx, Jy, Jz, hx, hl, time_interval, evol_num, train_set_type, loss, gate_fidelity, csv_file_path):
+    new_data = dict()
+    new_data['length'] = [length]
+    new_data['Jx'] = [Jx]
+    new_data['Jy'] = [Jy]
+    new_data['Jz'] = [Jz]
+    new_data['hx'] = [hx]
+    new_data['hl'] = [hl]
+    new_data['time_interval'] = [time_interval]
+    new_data['sample_num'] = [1]
+    new_data['evol_num'] = [evol_num]
+    new_data['train_set_type'] = [train_set_type]
+    new_data['loss'] = [loss]
+    new_data['gate_fidelity'] = [gate_fidelity]
+    
+    new_df = pd.DataFrame(new_data)
+
+    # 检查文件是否存在
+    if os.path.exists(csv_file_path):
+        # 加载现有的 CSV 数据
+        existing_data = pd.read_csv(csv_file_path)
+
+         # 将新数据与现有数据合并
+        combined_data = pd.concat([existing_data, new_df])
+        
+        # 去重，保留最后出现的行
+        combined_data = combined_data.drop_duplicates(subset=['Jx', 'Jy', 'Jz', 'hx', 'hl', 'time_interval', 'sample_num', 'evol_num', 'train_set_type', 'loss'], keep='last')
+    else:
+        # 文件不存在，直接使用新数据
+        combined_data = new_df
+    # 保存更新后的数据到 CSV 文件
+    combined_data.to_csv(csv_file_path, index=False)
 
 data_path = 'GraduationProject/Data'+args.folder
 pic_path = 'GraduationProject/pics'+args.folder
@@ -20,7 +65,7 @@ evol_mat_path = args.evol_mat_path
 mkdir(data_path)
 mkdir(pic_path)
 
-results = np.load(data_path+'/adqc_result_num{:d}.npy'.format(args.train_num), allow_pickle=True) # results是字典, 包含'train_pred', 'test_pred', 'train_loss', 'test_loss'
+results = np.load(data_path+'/adqc_result_sample_{:d}_evol_{:d}.npy'.format(args.sample_num, args.evol_num), allow_pickle=True) # results是字典, 包含'train_pred', 'test_pred', 'train_loss', 'test_loss'
 results = results.item()
 train_pred = results['train_pred']
 test_pred = results['test_pred']
@@ -34,13 +79,13 @@ test_loss = results['test_loss']
 x = list(range(0, len(train_loss)))
 
 print('train_num={:d}\ntrain_loss:{:.4e}\ttest_loss:{:.4e}\ntrain_fide:{:.4e}\ttest_fide:{:.4e}\n'\
-      .format(train_num, train_loss[-1], test_loss[-1], train_fide[-1], test_fide[-1]))
+      .format(evol_num, train_loss[-1], test_loss[-1], train_fide[-1], test_fide[-1]))
 # 打开一个文件，如果不存在则创建，如果存在则追加内容
 with open(data_path+'/fin_loss_train_num.txt', 'a') as f:
     f.write('train_num={:d}\ntrain_loss:{:.4e}\ttest_loss:{:.4e}\ntrain_fide:{:.4e}\ttest_fide:{:.4e}\n'\
-            .format(train_num, train_loss[-1], test_loss[-1], train_fide[-1], test_fide[-1]))
+            .format(evol_num, train_loss[-1], test_loss[-1], train_fide[-1], test_fide[-1]))
 
-qc_mat = np.load(data_path+'/qc_mat_num{:d}.npy'.format(args.train_num))
+qc_mat = np.load(data_path+'/qc_mat_sample_{:d}_evol_{:d}.npy'.format(args.sample_num, args.evol_num))
 qc_mat = tc.from_numpy(qc_mat)
 evol_mat = np.load(evol_mat_path)
 evol_mat = tc.from_numpy(evol_mat)
@@ -55,7 +100,7 @@ def gate_fidelity(E:tc.Tensor, U:tc.Tensor):
     return gate_fidelity
 gate_fidelity = gate_fidelity(qc_mat, evol_mat)
 with open(data_path+'/gate_fidelity.txt', 'a') as f:
-    f.write("{:.6e}\t{:d}\n".format(gate_fidelity, train_num))
+    f.write("{:.6e}\t{:d}\n".format(gate_fidelity, evol_num))
     pass
 
 # gate similarity
@@ -70,7 +115,7 @@ def similarity(E:tc.Tensor, U:tc.Tensor):
     return s
 similarity = similarity(qc_mat, evol_mat)
 with open(data_path+'/similarity.txt', 'a') as f:
-    f.write("{:.6e}\t{:d}\n".format(similarity, train_num))
+    f.write("{:.6e}\t{:d}\n".format(similarity, evol_num))
     pass
 
 def spectrum(mat:tc.Tensor):
@@ -81,6 +126,19 @@ def spectrum(mat:tc.Tensor):
     
 qc_energy = spectrum(qc_mat)
 evol_energy = spectrum(evol_mat)
+diff = tc.sqrt(tc.sum(tc.square(qc_energy-evol_energy)))/qc_energy.shape[0]
+with open(data_path+'/spectrum_diff.txt', 'a') as f:
+    f.write("{:.6e}\t{:d}\n".format(diff, evol_num))
+    pass
+
+if args.gen_type[0] == 'd':
+    train_set_type = 'product'
+elif args.gen_type[0] == 'n':
+    train_set_type = 'non_product'
+write_to_csv(length=args.length, Jx=args.Jx, Jy=args.Jy, Jz=args.Jz, hx=args.hx, hl=args.hl, \
+            time_interval=args.time_interval, evol_num=args.evol_num, \
+            train_set_type=train_set_type, loss=args.loss_type, \
+            gate_fidelity=float(gate_fidelity), csv_file_path='GraduationProject/Data/output.csv')
 
 legends = []
 plt.plot(x, train_loss, label='train loss')
@@ -88,7 +146,7 @@ plt.plot(x, test_loss, label= 'test loss')
 plt.legend()
 plt.xlabel('epochs')
 plt.ylabel('loss')
-plt.savefig(pic_path+'/loss_num{:d}.svg'.format(args.train_num))
+plt.savefig(pic_path+'/loss_num{:d}.svg'.format(args.evol_num))
 plt.close()
 
 legends = []
@@ -97,7 +155,7 @@ plt.plot(x, test_fide, label= 'test fidelity')
 plt.legend()
 plt.xlabel('epochs')
 plt.ylabel('fidelity')
-plt.savefig(pic_path+'/fidelity_num{:d}.svg'.format(args.train_num))
+plt.savefig(pic_path+'/fidelity_num{:d}.svg'.format(args.evol_num))
 plt.close()
 
 legends = []
@@ -106,7 +164,7 @@ plt.plot(evol_energy, label='Trotter')
 plt.legend()
 plt.xlabel('n')
 plt.ylabel('E*t')
-plt.savefig(pic_path+'/spectrum_num{:d}.svg'.format(args.train_num))
+plt.savefig(pic_path+'/spectrum_num{:d}.svg'.format(args.evol_num))
 plt.close()
 
 
@@ -115,6 +173,6 @@ plt.close()
 # plt.legend()
 # plt.xlabel('epochs')
 # plt.ylabel('gate_fidelity')
-# plt.savefig(pic_path+'/gate_fidelity_num{:d}.svg'.format(args.train_num))
+# plt.savefig(pic_path+'/gate_fidelity_num{:d}.svg'.format(args.evol_num))
 # plt.close()
 

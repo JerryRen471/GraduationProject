@@ -9,9 +9,6 @@ from torch.utils.data import DataLoader, TensorDataset
 
 # 通用参数
 para = {'lr': 1e-2,  # 初始学习率
-        # 'length_tot': 500,  # 序列总长度
-        # 'order': 10,  # 生成序列的傅里叶阶数
-        # 'length': 1,  # 每个样本长度
         'batch_size': 2000,  # batch大小
         'it_time': 1000,  # 总迭代次数
         'dtype': tc.complex128,  # 数据精度
@@ -27,7 +24,9 @@ import argparse
 parser = argparse.ArgumentParser(description='manual to this script')
 # parser.add_argument('--seed', type=int, default=None)
 parser.add_argument('--folder', type=str, default="/loss_multi_mags/dn")
-parser.add_argument('--train_num', type=int, default=10)
+parser.add_argument('--length', type=int, default=10)
+parser.add_argument('--sample_num', type=int, default=1)
+parser.add_argument('--evol_num', type=int, default=10)
 parser.add_argument('--loss_type', type=str, default='multi_mags')
 parser.add_argument('--depth', type=int, default=4)
 parser.add_argument('--rec_time', type=int, default=1)
@@ -38,17 +37,18 @@ args = parser.parse_args()
 para_adqc['loss_type'] = args.loss_type
 para_adqc['ini_way'] = 'identity'
 para_adqc['depth'] = args.depth
+para_adqc['length_in'] = args.length
 para_adqc['recurrent_time'] = args.rec_time
 path = 'GraduationProject/Data'+args.folder
 mkdir(path)
-data = np.load(path+'/data_num{:d}.npy'.format(args.train_num), allow_pickle=True)
+data = np.load(path+'/train_set_sample_{:d}_evol_{:d}.npy'.format(args.sample_num, args.evol_num), allow_pickle=True)
 data = data.item()
 
 print(data['train_set'].dtype)
 
 qc = ADQC.ADQC(para_adqc)
 qc, results_adqc, para_adqc = ADQC.train(qc, data, para_adqc)
-np.save(path+'/adqc_result_num{:d}'.format(args.train_num), results_adqc)
+np.save(path+'/adqc_result_sample_{:d}_evol_{:d}'.format(args.sample_num, args.evol_num), results_adqc)
 
 
 qc.single_state = False
@@ -61,7 +61,7 @@ with tc.no_grad():
     qc_mat = E.reshape([E.shape[0], -1])
 
 print('\nqc_mat.shape is', qc_mat.shape)
-np.save(path+'/qc_mat_num{:d}'.format(args.train_num), qc_mat.cpu())
+np.save(path+'/qc_mat_sample_{:d}_evol_{:d}'.format(args.sample_num, args.evol_num), qc_mat.cpu())
 
 # A = tc.mm(qc_mat, qc_mat.T.conj())
 # print(A)
