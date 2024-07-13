@@ -180,6 +180,18 @@ class TensorNetwork():
         self.renew_graph()
 
     def permute_legs(self, node_idx:int, perm:list):
+        node = self.node_list[node_idx]
+        self.node_list[node_idx] = tc.permute(node, perm)
+        keys = list(self.connect_graph.keys())[:]
+        for key in keys:
+            for i in range(len(key)):
+                if key[i] == node_idx:
+                    connect_legs = self.connect_graph[key]
+                    for j, legs in enumerate(connect_legs):
+                        tmp = list(legs)
+                        tmp[i] = perm[legs[i]]
+                        connect_legs[j] = tuple(tmp)
+                    self.connect_graph[key] = connect_legs
         pass
 
     def merge_all(self):
@@ -280,35 +292,70 @@ class TensorNetwork():
             self.connect_graph[key] = old_legs
 
 class TensorTrain(TensorNetwork):
-    def __init__(self, tensor, center, chi=None, device=tc.device('cpu'), dtype=tc.complex64):
+    def __init__(self, tensors:list, length:int, phydim:int=2, center:int=-1, chi=None, device=tc.device('cpu'), dtype=tc.complex64):
         super(TensorTrain, self).__init__()
-        self.tensor = tensor
-        self.phydim = tensor.shape[0]
-        self.length = tensor.dim()
-        self.center = center
+
+        self.length = length
+        self.phydim = phydim
         self.device = device
         self.dtype = dtype
         self.chi = chi
+        self.center = center % self.length
+
+        # center_reletive = self.center
+        tensor = tensors[0]
+        flags = [tensor.dim()-1]
+        tensor = tc.unsqueeze(tensor, 0)
+        tensor = tc.unsqueeze(tensor, -1)
         self.add_node(tensor, device=device, dtype=dtype)
-        self.initialize(if_trun=True)
+        # if center_reletive > tensor.dim()-3:
+        #     self.normalize_node(node_idx=-1, center=-1)
+        #     center_reletive -= tensor.dim()-2
+        # else:
+        #     self.normalize_node(node_idx=-1, center=center_reletive)
+        for tensor in tensors[1:]:
+            flags.append(flags[-1] + tensor.dim())
+            tensor = tc.unsqueeze(tensor, 0)
+            tensor = tc.unsqueeze(tensor, -1)
+            self.add_node(tensor, device=device, dtype=dtype)
+            self.connect([-2, -1], [-1, 0])
+        flags.pop()
+
+        self.initialize(flags, if_trun=True)
         pass
 
-    def initialize(self, if_trun=True):
+    def initialize(self, flags, if_trun=True):
         for i in range(self.center):
-            if i == 0:
-                legs_L = [0]
-            else:
-                legs_L = [0, 1]
+            legs_L = [0, 1]
+            if i in flags:
+                self.merge_nodes((i, i+1))
             self.split_node(i, legs_L, group_side='L', if_trun=if_trun)
             self.merge_nodes((i+1, i+2))
+        
         for j in range(-1, -self.length + self.center, -1):
-            if j == -1:
-                legs_R = [-1]
-            else:
-                legs_R = [-2, -1]
+            legs_R = [-2, -1]
+            if (j % self.length - 1) in flags:
+                self.merge_nodes((j-1, j))
             self.split_node(j, legs_R, group_side='R', if_trun=if_trun)
             self.merge_nodes((j-2, j-1))
         self.normalize()
+    
+    # def initialize__(self, if_trun=True):
+    #     for i in range(self.center):
+    #         if i == 0:
+    #             legs_L = [0]
+    #         else:
+    #             legs_L = [0, 1]
+    #         self.split_node(i, legs_L, group_side='L', if_trun=if_trun)
+    #         self.merge_nodes((i+1, i+2))
+    #     for j in range(-1, -self.length + self.center, -1):
+    #         if j == -1:
+    #             legs_R = [-1]
+    #         else:
+    #             legs_R = [-2, -1]
+    #         self.split_node(j, legs_R, group_side='R', if_trun=if_trun)
+    #         self.merge_nodes((j-2, j-1))
+    #     self.normalize()
 
     def move_center_to(self, to_idx, if_trun=True):
         to_idx = to_idx % self.length
@@ -359,7 +406,8 @@ class TensorTrain(TensorNetwork):
         if self.center not in [0, self.length-1]:
             norm = tc.einsum('ijk, ijk->', center_tn, center_tn.conj())
         else:
-            norm = tc.einsum('ij, ij->', center_tn, center_tn.conj())
+            norm = tc.einsum('ijk, ijk->', center_tn, center_tn.conj())
+            # norm = tc.einsum('ij, ij->', center_tn, center_tn.conj())
         return norm.real
     
     def normalize(self):
@@ -369,15 +417,17 @@ class TensorTrain(TensorNetwork):
 
 if __name__ == '__main__':
     t1 = time.time()
-    t = tc.rand([2**20], dtype=tc.complex64)
+    length = 3
+    t = [tc.rand([2], dtype=tc.complex64) for _ in range(length)]
+    print(len(t))
     # t[0] = 1
-    t = t.reshape([2]*20)
-    mps = TensorTrain(t, device=tc.device('cpu'), dtype=tc.complex64, center=2, chi=3)
+    # t = t.reshape([2]*20)
+    mps = TensorTrain(t, length=length, phydim=2, center=0, chi=3, device=tc.device('cpu'), dtype=tc.complex64)
     print(mps.get_norm())
     for i in mps.node_list:
         print(i.shape)
         print()
-    print(mps.connect_graph)
+    # print(mps.connect_graph)
     gate = tc.rand([4, 4], dtype=tc.complex64)
     mps.act_two_body_gate(gate, pos = [1, 2])
     # mps.split_node()
@@ -385,7 +435,7 @@ if __name__ == '__main__':
     print(mps.connect_graph[(1,2)])
     for i, t in enumerate(mps.node_list):
         print(f"site{i} shape:", t.shape)
-    print(mps.connect_graph)
+    # print(mps.connect_graph)
     print(mps.get_norm())
     a0 = mps.node_list[-2]
     print(tc.einsum('ijk, ljk->il', a0, a0.conj()))
