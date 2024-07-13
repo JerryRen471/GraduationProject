@@ -161,7 +161,7 @@ def n_combined_mags(states, n, which_ops=None):
         num_ops = 1
         which_ops = [which_ops]
     length = states.ndimension()-1
-    mags = tc.zeros((states.shape[0], num_ops, length-n+1))
+    mags = tc.zeros((states.shape[0], num_ops, length-n+1), device=states.device, dtype=states.dtype)
     for i in range(length-n+1):
         rhos = reduced_density_matrces(states, list(range(i, i+n)))
         for s in range(num_ops):
