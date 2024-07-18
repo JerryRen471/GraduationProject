@@ -26,6 +26,12 @@ class TensorNetwork():
             self.move_node(-1, site)
 
     def connect(self, node_leg1:list, node_leg2:list):
+        """
+        输入的 node_leg 格式将被标准化：
+        1.没有负数; 
+        2.node1 < node2
+        """
+        # 将输入的 node_leg 格式标准化：1.没有负数; 2.node1<node2
         if node_leg1[0] < 0:
             node_leg1[0] = len(self.node_list)+node_leg1[0]
         if node_leg2[0] < 0:
@@ -36,6 +42,7 @@ class TensorNetwork():
             tmp = node_leg1
             node_leg1 = node_leg2
             node_leg2 = tmp
+        
         node1 = node_leg1[0]
         leg1 = node_leg1[1]
         node2 = node_leg2[0]
@@ -103,24 +110,31 @@ class TensorNetwork():
                 new_leg_pairs = [] # ?
                 old_leg_pairs = self.connect_graph.pop(key)
                 for old_leg_pair in old_leg_pairs:
-                    new_node_pair = []
+                    new_node_pair = [None, None]
                     new_leg_pair = list(old_leg_pair)
                     for j in range(2):
                         if key[j] == node_pair[0]:
-                            new_node_pair.append(key[j])
+                            new_node_pair[j] = node_pair[0]
                             new_leg_pair[j] = n1_left_legs.index(old_leg_pair[j])
                             pass
                         elif key[j] == node_pair[1]:
-                            new_node_pair.append(node_pair[0])
+                            new_node_pair[j] = node_pair[0]
                             new_leg_pair[j] = len(n1_left_legs)+n2_left_legs.index(old_leg_pair[j])
                             pass
                         elif key[j] > node_pair[1]:
-                            new_node_pair.append(key[j]-1)
+                            new_node_pair[j] = key[j]-1
                         else:
-                            new_node_pair.append(key[j])
+                            new_node_pair[j] = key[j]
+                    if new_node_pair[0] > new_node_pair[1]:
+                        tmp = new_node_pair[0]
+                        new_node_pair[0] = new_node_pair[1]
+                        new_node_pair[1] = tmp
+                        tmp = new_leg_pair[0]
+                        new_leg_pair[0] = new_leg_pair[1]
+                        new_leg_pair[1] = tmp
                     new_leg_pairs.append(tuple(new_leg_pair))
-                new_leg_pairs = dict_tmp.get(tuple(sorted(new_node_pair)), []) + new_leg_pairs
-                dict_tmp[tuple(sorted(new_node_pair))] = new_leg_pairs
+                new_leg_pairs = dict_tmp.get(tuple(new_node_pair), []) + new_leg_pairs
+                dict_tmp[tuple(new_node_pair)] = new_leg_pairs
             self.connect_graph.update(dict_tmp)
 
     def move_graph(self, moves):
@@ -175,7 +189,7 @@ class TensorNetwork():
             n1_left_legs.remove(leg_piar[0])
             n2_left_legs.remove(leg_piar[1])
         new_node = tc.tensordot(node1, node2, dims=(n1_merge_legs, n2_merge_legs))
-        self.node_list = self.node_list[:node_pair[0]] + [new_node] + self.node_list[node_pair[1]+1:]
+        self.node_list = self.node_list[:node_pair[0]] + [new_node] + self.node_list[node_pair[0]+1:node_pair[1]] + self.node_list[node_pair[1]+1:]
         self.history['merge_nodes'].append([node_pair, n1_left_legs, n2_left_legs])
         self.renew_graph()
 
@@ -374,6 +388,30 @@ class TensorTrain(TensorNetwork):
                 self.merge_nodes((i-1, i-2))
                 self.center = (i-1) % self.length
 
+    def act_n_body_gate(self, gate, pos:list):
+        """
+        gate: 作用的门，是形状为(2**n, 2**n)的矩阵（2也可以是phy_dim）
+        pos: 连续的位置
+        """
+        n = len(pos)
+        center = (n-1) // 2
+        perm = [_ for _ in range(0, center)] + [_ for _ in range(n, n+center)] + []
+        reshaped_gate = gate.reshape([self.phydim] * (2*n))
+
+        for i in range(center, 0, -1):
+            pass
+        pass
+
+    def act_one_body_gate(self, gate, pos:int):
+        self.move_center_to(pos)
+        self.add_node(gate, device=self.device, dtype=self.dtype)
+        self.connect([pos, 1], [-1, 1])
+        self.move_node(-1, pos)
+        self.merge_nodes((pos, pos+1))
+        self.permute_legs(pos, perm=[1, 0, 2])
+        self.normalize()
+        pass
+
     def act_two_body_gate(self, gate, pos):
         gr = tc.eye(self.phydim**2, device=self.device, dtype=self.dtype).reshape(
             [self.phydim]*4).permute(0, 2, 3, 1).reshape(self.phydim, self.phydim**2, self.phydim)
@@ -417,7 +455,7 @@ class TensorTrain(TensorNetwork):
 
 if __name__ == '__main__':
     t1 = time.time()
-    length = 3
+    length = 4
     t = [tc.rand([2], dtype=tc.complex64) for _ in range(length)]
     print(len(t))
     # t[0] = 1
@@ -428,15 +466,18 @@ if __name__ == '__main__':
         print(i.shape)
         print()
     # print(mps.connect_graph)
+    mps.act_one_body_gate(gate=tc.rand([2, 2], dtype=tc.complex64), pos=1)
+    print(mps.connect_graph)
+    # mps.act_one_body_gate(gate=tc.rand([2, 2], dtype=tc.complex64), pos=2)
     gate = tc.rand([4, 4], dtype=tc.complex64)
-    mps.act_two_body_gate(gate, pos = [1, 2])
+    # mps.act_two_body_gate(gate, pos = [1, 2])
     # mps.split_node()
     # mps.flatten((0, 1))
     print(mps.connect_graph[(1,2)])
     for i, t in enumerate(mps.node_list):
         print(f"site{i} shape:", t.shape)
-    # print(mps.connect_graph)
+    print(mps.connect_graph)
     print(mps.get_norm())
-    a0 = mps.node_list[-2]
+    a0 = mps.node_list[-3]
     print(tc.einsum('ijk, ljk->il', a0, a0.conj()))
     print(time.time() - t1)
