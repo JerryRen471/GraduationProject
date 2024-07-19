@@ -12,7 +12,7 @@ class TensorNetwork():
         self.chi = chi
         self.connect_graph = dict()
         self.device = device
-        self.device = dtype
+        self.dtype = dtype
         self.history = {'split_node':[], 'merge_nodes':[], 'move_node':[]}
     
     def copy_from_tn(self, tn):
