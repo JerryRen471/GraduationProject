@@ -3,7 +3,7 @@ import math
 import torch as tc
 from torch import nn
 
-from Library import MathFun as mf
+from Library import MathFun as mf, TensorNetwork
 from Library import BasicFun as bf
 from Library.DataFun import feature_map
 from Library.QuantumTools import vecs2product_state
@@ -166,6 +166,18 @@ class ADQC_basic(nn.Module):
         state1 = state1.reshape(shape)
         return state1.permute(bf.inverse_permutation(perm))
 
+    def act_nth_gate_mps(self, mps:TensorNetwork.TensorTrain, n:int):
+        m_p = len(self.layers[n].pos)
+        m_c = len(self.layers[n].pos_control) # control qubit not considered yet
+        mps.act_two_body_gate(self.layers[n].tensor.reshape(-1, 2 ** m_p), pos=self.layers[n].pos)
+        return mps
+
+    def act_nth_gate_multi_mps(self, mps_pack:TensorNetwork.TensorTrain_pack, n:int):
+        m_p = len(self.layers[n].pos)
+        m_c = len(self.layers[n].pos_control) # control qubit not considered yet
+        mps_pack.act_two_body_gate(self.layers[n].tensor.reshape(-1, 2 ** m_p), pos=self.layers[n].pos)
+        return mps_pack
+
     def act_nth_gate_multi_states(self, states, n):
         m_p = len(self.layers[n].pos)
         m_c = len(self.layers[n].pos_control)
@@ -234,7 +246,16 @@ class ADQC_basic(nn.Module):
                 name = str(len(self.layers)) + '_' + x.name
             self.layers.add_module(name, x)
 
-    def forward(self, state):
+    def forward(self, states):
+        return self.forward_mps(states)
+
+    def forward_mps(self, mps):
+        self.renew_gates()
+        for n in range(len(self.layers)):
+            mps = self.act_nth_gate_multi_mps(mps, n)
+        return mps
+
+    def forward_states(self, state):
         self.renew_gates()
         if self.single_state:
             for n in range(len(self.layers)):
