@@ -708,7 +708,7 @@ class TensorNetwork_pack():
 
 class TensorTrain(TensorNetwork):
     def __init__(self, tensors:list, length:int, phydim:int=2, center:int=-1, chi=None, device=tc.device('cpu'), dtype=tc.complex64):
-        super(TensorTrain, self).__init__()
+        super().__init__(chi=chi, device=device, dtype=dtype)
 
         self.length = length
         self.phydim = phydim
@@ -874,7 +874,7 @@ class TensorTrain_pack(TensorNetwork_pack):
         """
         tensor_packs: 包含多个局域张量的列表，列表中每一个元素(tensor)对应在该位置的n个局域张量，tensor[i].shape=[mps态的个数, 局域张量的形状]
         """
-        super(TensorTrain, self).__init__()
+        super().__init__(chi=chi, device=device, dtype=dtype)
 
         self.length = length
         self.phydim = phydim
@@ -988,12 +988,11 @@ class TensorTrain_pack(TensorNetwork_pack):
         self.connect([pos, 2], [-1, 1])
         self.move_node(-1, pos)
         self.merge_nodes((pos, pos+1), is_gate=(True, False))
-        self.permute_legs(pos, perm=[1, 0, 2])
+        self.permute_legs(pos, perm=[2, 1, 3])
         self.normalize()
         pass
 
     def act_two_body_gate(self, gate, pos):
-        # not finished
         gr = tc.eye(self.phydim**2, device=self.device, dtype=self.dtype).reshape(
             [self.phydim]*4).permute(0, 2, 3, 1).reshape(self.phydim, self.phydim**2, self.phydim)
         gl = gate.reshape([self.phydim]*4).permute(0, 1, 3, 2).reshape(self.phydim, self.phydim**2, self.phydim)
@@ -1016,7 +1015,7 @@ class TensorTrain_pack(TensorNetwork_pack):
         self.split_node(i, legs_group=[-1], group_side='R', if_trun=False)
         self.merge_nodes((i+1, i+2))
         self.merge_nodes((i+1, i+2))
-        self.split_node(i+1, legs_group=[0], group_side='L', if_trun=True)
+        self.split_node(i+1, legs_group=[1], group_side='L', if_trun=True)
         self.merge_nodes((i, i+1))
         self.merge_nodes((i, i+1))
         self.center = i
@@ -1035,16 +1034,18 @@ class TensorTrain_pack(TensorNetwork_pack):
     def normalize(self):
         norm = self.get_norm()
         center_tn = self.node_list[self.center]
-        self.node_list[self.center] = center_tn / tc.sqrt(norm)
+        for i in range(norm.numel()):
+            self.node_list[self.center][i] = center_tn[i] / tc.sqrt(norm)[i]
+        # self.node_list[self.center] = center_tn / tc.sqrt(norm)
 
 if __name__ == '__main__':
     t1 = time.time()
     length = 4
-    t = [tc.rand([2], dtype=tc.complex64) for _ in range(length)]
+    t = [tc.rand([5, 2], dtype=tc.complex64) for _ in range(length)]
     print(len(t))
     # t[0] = 1
     # t = t.reshape([2]*20)
-    mps = TensorTrain(t, length=length, phydim=2, center=0, chi=3, device=tc.device('cpu'), dtype=tc.complex64)
+    mps = TensorTrain_pack(t, length=length, phydim=2, center=0, chi=3, device=tc.device('cpu'), dtype=tc.complex64)
     print(mps.get_norm())
     for i in mps.node_list:
         print(i.shape)
@@ -1052,16 +1053,13 @@ if __name__ == '__main__':
     # print(mps.connect_graph)
     mps.act_one_body_gate(gate=tc.rand([2, 2], dtype=tc.complex64), pos=1)
     print(mps.connect_graph)
-    # mps.act_one_body_gate(gate=tc.rand([2, 2], dtype=tc.complex64), pos=2)
     gate = tc.rand([4, 4], dtype=tc.complex64)
-    # mps.act_two_body_gate(gate, pos = [1, 2])
-    # mps.split_node()
-    # mps.flatten((0, 1))
-    print(mps.connect_graph[(1,2)])
+    mps.act_two_body_gate(gate, pos = [1, 2])
     for i, t in enumerate(mps.node_list):
         print(f"site{i} shape:", t.shape)
     print(mps.connect_graph)
     print(mps.get_norm())
-    a0 = mps.node_list[-3]
-    print(tc.einsum('ijk, ljk->il', a0, a0.conj()))
+    print('center is ', mps.center)
+    a0 = mps.node_list[-1]
+    print(tc.einsum('nijk, nljk->nil', a0, a0.conj()))
     print(time.time() - t1)
