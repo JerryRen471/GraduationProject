@@ -1038,6 +1038,17 @@ class TensorTrain_pack(TensorNetwork_pack):
             self.node_list[self.center][i] = center_tn[i] / tc.sqrt(norm)[i]
         # self.node_list[self.center] = center_tn / tc.sqrt(norm)
 
+def rand_prod_mps_pack(number, length, chi, phydim=2, device=tc.device('cpu'), dtype=tc.complex64):
+    states = [tc.rand([number, phydim], dtype=dtype) for _ in range(length)]
+    for i in range(len(states)):
+        site = states[i]
+        norm = tc.sqrt(tc.einsum('ni, ni->n', site, site.conj()))
+        site[:, 0] = site[:, 0] / norm
+        site[:, 1] = site[:, 1] / norm
+        states[i] = site
+    mps = TensorTrain_pack(states, length=length, phydim=phydim, center=-1, chi=chi, device=device, dtype=dtype)
+    return mps
+
 def inner_mps_pack(mps1:TensorTrain_pack, mps2:TensorTrain_pack):
     length = len(mps1.node_list)
     mps1_nodes = mps1.node_list
@@ -1048,7 +1059,7 @@ def inner_mps_pack(mps1:TensorTrain_pack, mps2:TensorTrain_pack):
     result.connect([0, 2], [1, 2])
     result.connect([0, 1], [1, 1])
     result.merge_nodes((0, 1))
-    for i in range(length):
+    for i in range(1, length):
         result.add_node(mps1_nodes[i].conj())
         result.add_node(mps2_nodes[i])
         result.connect([-1, 2], [-2, 2])
@@ -1056,7 +1067,7 @@ def inner_mps_pack(mps1:TensorTrain_pack, mps2:TensorTrain_pack):
         result.connect([-1, 1], [-3, 2])
         result.merge_nodes((-1, -2))
         result.flatten((0, 1))
-        result.merge((0, 1))
+        result.merge_nodes((0, 1))
     return tc.squeeze(result.node_list[0])
 
 if __name__ == '__main__':
