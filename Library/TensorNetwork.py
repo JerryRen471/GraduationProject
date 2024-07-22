@@ -1020,7 +1020,7 @@ class TensorTrain_pack(TensorNetwork_pack):
         self.merge_nodes((i, i+1))
         self.center = i
         self.normalize()
-        pass
+        return self
 
     def get_norm(self):
         center_tn = self.node_list[self.center]
@@ -1037,6 +1037,27 @@ class TensorTrain_pack(TensorNetwork_pack):
         for i in range(norm.numel()):
             self.node_list[self.center][i] = center_tn[i] / tc.sqrt(norm)[i]
         # self.node_list[self.center] = center_tn / tc.sqrt(norm)
+
+def inner_mps_pack(mps1:TensorTrain_pack, mps2:TensorTrain_pack):
+    length = len(mps1.node_list)
+    mps1_nodes = mps1.node_list
+    mps2_nodes = mps2.node_list
+    result = TensorNetwork_pack(chi=None, device=mps1.device, dtype=mps1.dtype)
+    result.add_node(mps1_nodes[0].conj())
+    result.add_node(mps2_nodes[0])
+    result.connect([0, 2], [1, 2])
+    result.connect([0, 1], [1, 1])
+    result.merge_nodes((0, 1))
+    for i in range(length):
+        result.add_node(mps1_nodes[i].conj())
+        result.add_node(mps2_nodes[i])
+        result.connect([-1, 2], [-2, 2])
+        result.connect([-2, 1], [-3, 1])
+        result.connect([-1, 1], [-3, 2])
+        result.merge_nodes((-1, -2))
+        result.flatten((0, 1))
+        result.merge((0, 1))
+    return tc.squeeze(result.node_list[0])
 
 if __name__ == '__main__':
     t1 = time.time()
