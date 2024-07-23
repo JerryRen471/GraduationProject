@@ -1,12 +1,22 @@
+from copy import deepcopy
 import torch as tc
 from Library import PhysModule as phy
-from Library.TensorNetwork import TensorTrain, TensorNetwork
+from Library.TensorNetwork import TensorTrain, TensorNetwork, inner_mps_pack, rand_prod_mps_pack
 import time
 
 device=tc.device('cpu')
 dtype=tc.complex64
-mps = tc.load('test.pt')
-print(mps.center)
-print(mps.chi)
-print(len(mps.node_list))
-print(mps.connect_graph)
+mps1 = rand_prod_mps_pack(4, 5, chi=4, phydim=2, device=device, dtype=dtype)
+mps2 = rand_prod_mps_pack(4, 5, chi=4, phydim=2, device=device, dtype=dtype)
+fidelity = inner_mps_pack(mps1, mps2)
+print(fidelity)
+sigma_z = tc.zeros([2, 2], device=device, dtype=dtype)
+sigma_z[0, 0] = 1+0.j
+sigma_z[1, 1] = -1+0.j
+print(sigma_z)
+mps_ = deepcopy(mps1)
+mps_.node_list = mps1.node_list[:]
+mps_.act_one_body_gate(sigma_z, 2)
+print(tc.dist(mps_.node_list[2], mps1.node_list[2]))
+hz = inner_mps_pack(mps1, mps_)
+print(hz)
