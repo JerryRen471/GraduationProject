@@ -1,7 +1,7 @@
 from copy import deepcopy
 import torch as tc
 from Library import PhysModule as phy
-from Library.TensorNetwork import TensorTrain, TensorNetwork, inner_mps_pack, rand_prod_mps_pack
+from Library.TensorNetwork import *
 import time
 
 device=tc.device('cpu')
@@ -19,4 +19,7 @@ mps_.node_list = mps1.node_list[:]
 mps_.act_one_body_gate(sigma_z, 2)
 print(tc.dist(mps_.node_list[2], mps1.node_list[2]))
 hz = inner_mps_pack(mps1, mps_)
-print(hz)
+hz_ = multi_mags_from_mps_pack(mps1, spins=[sigma_z])
+print(hz_.shape)
+print(hz_)
+# print(hz-hz_)
