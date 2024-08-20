@@ -1,3 +1,4 @@
+from copy import deepcopy
 import math
 
 import torch as tc
@@ -141,9 +142,10 @@ class ADGate(nn.Module):
 
 class ADQC_basic(nn.Module):
 
-    def __init__(self, device=None, dtype=tc.complex128):
+    def __init__(self, state_type='tensor', device=None, dtype=tc.complex128):
         super(ADQC_basic, self).__init__()
         self.single_state = True
+        self.state_type = state_type
         self.device = bf.choose_device(device)
         self.dtype = dtype
         self.layers = nn.Sequential()
@@ -169,13 +171,14 @@ class ADQC_basic(nn.Module):
     def act_nth_gate_mps(self, mps:TensorNetwork.TensorTrain, n:int):
         m_p = len(self.layers[n].pos)
         m_c = len(self.layers[n].pos_control) # control qubit not considered yet
-        mps.act_two_body_gate(self.layers[n].tensor.reshape(-1, 2 ** m_p), pos=self.layers[n].pos)
+        mps = mps.act_two_body_gate(self.layers[n].tensor.reshape(-1, 2 ** m_p), pos=self.layers[n].pos)
         return mps
 
     def act_nth_gate_multi_mps(self, mps_pack:TensorNetwork.TensorTrain_pack, n:int):
         m_p = len(self.layers[n].pos)
         m_c = len(self.layers[n].pos_control) # control qubit not considered yet
-        mps_pack.act_two_body_gate(self.layers[n].tensor.reshape(-1, 2 ** m_p), pos=self.layers[n].pos)
+        # new_mps = TensorNetwork.copy_from_mps_pack(mps_pack)
+        mps_pack = mps_pack.act_two_body_gate(self.layers[n].tensor.reshape(-1, 2 ** m_p), pos=self.layers[n].pos)
         return mps_pack
 
     def act_nth_gate_multi_states(self, states, n):
@@ -247,7 +250,10 @@ class ADQC_basic(nn.Module):
             self.layers.add_module(name, x)
 
     def forward(self, states):
-        return self.forward_mps(states)
+        if self.state_type == 'tensor':
+            return self.forward_tensor(states)
+        else:
+            return self.forward_mps(states)
 
     def forward_mps(self, mps):
         self.renew_gates()
@@ -255,7 +261,7 @@ class ADQC_basic(nn.Module):
             mps = self.act_nth_gate_multi_mps(mps, n)
         return mps
 
-    def forward_states(self, state):
+    def forward_tensor(self, state):
         self.renew_gates()
         if self.single_state:
             for n in range(len(self.layers)):
@@ -272,11 +278,11 @@ class ADQC_basic(nn.Module):
 
 class ADQC_LatentGates(ADQC_basic):
 
-    def __init__(self, pos_one_layer=None, lattice='brick',
+    def __init__(self, state_type='tensor', pos_one_layer=None, lattice='brick',
                  num_q=10, depth=3, ini_way='random',
                  device=None, dtype=tc.complex128):
         super(ADQC_LatentGates, self).__init__(
-            device=device, dtype=dtype)
+            state_type=state_type, device=device, dtype=dtype)
         self.lattice = lattice.lower()
         self.depth = depth
         self.ini_way = ini_way
@@ -290,7 +296,6 @@ class ADQC_LatentGates(ADQC_basic):
             for ng in range(len(self.pos)):
                 if self.ini_way == 'identity':
                     paras = tc.randn((4, 4)) * 1e-2 + tc.eye(4, 4)
-                    paras = paras.to(device=self.device, dtype=self.dtype)
                 elif self.ini_way == 'random':
                     paras = tc.randn((4, 4))
                 name = self.lattice + '_layer' + str(nd) + '_gate' + str(ng)
@@ -469,11 +474,11 @@ class FCNN_ADQC_latent(ADQC_basic):
 
 class Variational_Quantum_Circuit(ADQC_basic):
 
-    def __init__(self, pos_one_layer=None, lattice='brick',
+    def __init__(self, pos_one_layer=None, state_type='tensor', lattice='brick',
                  num_q=10, depth=3, ini_way='random',
                  device=None, dtype=tc.complex128):
         super(Variational_Quantum_Circuit, self).__init__(
-            device=device, dtype=dtype)
+            state_type=state_type, device=device, dtype=dtype)
         self.lattice = lattice.lower()
         self.depth = depth
         self.ini_way = ini_way
