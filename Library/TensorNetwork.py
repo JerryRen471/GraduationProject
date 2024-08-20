@@ -1,9 +1,11 @@
+from copy import deepcopy
 from platform import node
 import time
 from turtle import left
 from debugpy import connect
 import torch as tc
 import numpy as np
+from Library.BasicFun import pad_and_cat
 # from traitlets import default
 
 def copy_from_tn(tn):
@@ -36,7 +38,7 @@ class TensorNetwork():
         self.history = tn.history
 
     def add_node(self, node:tc.Tensor, site=-1, device=tc.device('cpu'), dtype=tc.complex64):
-        self.node_list.append(node.to(device=device, dtype=dtype))
+        self.node_list.append(node)
         if site != -1:
             self.move_node(-1, site)
 
@@ -272,9 +274,9 @@ class TensorNetwork():
         u = u[:, :dc].reshape([dims[i] for i in legs_L]+[dc])
         s = tc.diag(s[:dc])
         v = v[:dc, :].reshape([dc]+[dims[i] for i in legs_R])
-        self.node_list = self.node_list[:node_idx] + [u.to(device=self.device, dtype=self.dtype), \
-                                                        s.to(device=self.device, dtype=self.dtype), \
-                                                        v.to(device=self.device, dtype=self.dtype)] + self.node_list[node_idx+1:]
+        self.node_list = self.node_list[:node_idx] + [u, \
+                                                        s, \
+                                                        v] + self.node_list[node_idx+1:]
         self.history['split_node'].append([node_idx, legs_L[:], legs_R[:]])
         self.renew_graph()
         pass
@@ -340,7 +342,7 @@ class TensorNetwork_pack():
         self.device = device
         self.dtype = dtype
         self.history = {'split_node':[], 'merge_nodes':[], 'move_node':[]}
-        self.trunc_error = 0
+        self.trunc_error = tc.tensor(0, dtype=dtype, device=device)
     
     def copy_from_tn(self, tn):
         self.node_list = tn.node_list[:]
@@ -352,7 +354,7 @@ class TensorNetwork_pack():
         self.history = tn.history
 
     def add_node(self, node:tc.Tensor, site=-1, device=tc.device('cpu'), dtype=tc.complex64):
-        self.node_list.append(node.to(device=device, dtype=dtype))
+        self.node_list.append(node)
         if site != -1:
             self.move_node(-1, site)
 
@@ -609,6 +611,28 @@ class TensorNetwork_pack():
         for i in range(len(self.node_list)-1):
             self.merge_nodes((0, 1))
 
+    @staticmethod
+    def find_first_column_with_element_magnitude_less_than_e(tensor, e):
+        n, d = tensor.shape
+
+        left, right = 0, d - 1
+        
+        while left <= right:
+            mid = (left + right) // 2
+            # 检查中间列是否有模长小于 e 的元素
+            if tc.any(tc.abs(tensor[:, mid]) < e):
+                # 如果中间列有模长小于 e 的元素，则继续检查左半部分
+                right = mid - 1
+            else:
+                # 如果中间列没有模长小于 e 的元素，则继续检查右半部分
+                left = mid + 1
+
+        # 检查找到的左边界列
+        if left < d and tc.any(tc.abs(tensor[:, left]) < e):
+            return left
+
+        return d  # 如果没有找到这样的列，返回 tensor 的总列数
+
     def split_node(self, node_idx:int, legs_group:list, group_side:str='L', if_trun=True):
         if node_idx < 0:
             node_idx = node_idx + len(self.node_list)
@@ -631,23 +655,29 @@ class TensorNetwork_pack():
             dimL = dimL * dims[i]
         perm = [0] + legs_L[:] + legs_R[:]
         node = node.permute(perm)
+        node = node + tc.randn(node.shape, dtype=node.dtype, device=node.device)*1e-10
         u, s, v = tc.linalg.svd(node.reshape(dims[0], dimL, -1), full_matrices=False)
+        # Deal with the near zero singular values.
+        # If not may lead to infinite gradients!!!
+        col = self.find_first_column_with_element_magnitude_less_than_e(s, 0)
+
         if if_trun:
             if self.chi == None:
-                dc = s.shape[1]
+                dc = col
             else:
-                dc = min(self.chi, s.shape[1])
+                dc = min(self.chi, col)
             trunc_error = tc.sum(s[:, dc:], dim=1)
         else:
-            dc = s.shape[1]
+            dc = col
             trunc_error = 0
         self.trunc_error += trunc_error
+        ####################### CHECK ##########################
         u = u[:, :, :dc].reshape([dims[0]] + [dims[i] for i in legs_L] + [dc])
-        s = tc.diag_embed(s[:, :dc])
+        s = tc.diag_embed(s[:, :dc]).to(self.dtype)
         v = v[:, :dc, :].reshape([dims[0]] + [dc] + [dims[i] for i in legs_R])
-        self.node_list = self.node_list[:node_idx] + [u.to(device=self.device, dtype=self.dtype), \
-                                                        s.to(device=self.device, dtype=self.dtype), \
-                                                        v.to(device=self.device, dtype=self.dtype)] + self.node_list[node_idx+1:]
+        self.node_list = self.node_list[:node_idx] + [u, \
+                                                        s, \
+                                                        v] + self.node_list[node_idx+1:]
         self.history['split_node'].append([node_idx, legs_L[:], legs_R[:]])
         self.renew_graph()
         pass
@@ -870,7 +900,7 @@ class TensorTrain(TensorNetwork):
         self.node_list[self.center] = center_tn / tc.sqrt(norm)
 
 class TensorTrain_pack(TensorNetwork_pack):
-    def __init__(self, tensor_packs:list, length:int, phydim:int=2, center:int=-1, chi=None, device=tc.device('cpu'), dtype=tc.complex64):
+    def __init__(self, tensor_packs:list, length:int, phydim:int=2, center:int=-1, chi=None, device=tc.device('cpu'), dtype=tc.complex64, initialized=False):
         """
         tensor_packs: 包含多个局域张量的列表，列表中每一个元素(tensor)对应在该位置的n个局域张量，tensor[i].shape=[mps态的个数, 局域张量的形状]
         """
@@ -882,27 +912,33 @@ class TensorTrain_pack(TensorNetwork_pack):
         self.dtype = dtype
         self.chi = chi
         self.center = center % self.length
+        self.trunc_error = tc.zeros(size=(tensor_packs[0].shape[0],), device=device, dtype=dtype)
 
         # center_reletive = self.center
         tensor = tensor_packs[0]
         flags = [tensor.dim()-2]
-        tensor = tc.unsqueeze(tensor, 1)
-        tensor = tc.unsqueeze(tensor, -1)
-        self.add_node(tensor, device=device, dtype=dtype)
-        # if center_reletive > tensor.dim()-3:
-        #     self.normalize_node(node_idx=-1, center=-1)
-        #     center_reletive -= tensor.dim()-2
-        # else:
-        #     self.normalize_node(node_idx=-1, center=center_reletive)
-        for tensor in tensor_packs[1:]:
-            flags.append(flags[-1] + tensor.dim()-1)
+        if initialized == False:
             tensor = tc.unsqueeze(tensor, 1)
             tensor = tc.unsqueeze(tensor, -1)
             self.add_node(tensor, device=device, dtype=dtype)
-            self.connect([-2, -1], [-1, 1])
-        flags.pop()
+            #     center_reletive -= tensor.dim()-2
+            # else:
+            #     self.normalize_node(node_idx=-1, center=center_reletive)
+            for tensor in tensor_packs[1:]:
+                flags.append(flags[-1] + tensor.dim()-1)
+                tensor = tc.unsqueeze(tensor, 1)
+                tensor = tc.unsqueeze(tensor, -1)
+                self.add_node(tensor, device=device, dtype=dtype)
+                self.connect([-2, -1], [-1, 1])
+            flags.pop()
 
-        self.initialize(flags, if_trun=True)
+            self.initialize(flags, if_trun=True)
+        else:
+            self.node_list = []
+            for node in tensor_packs:
+                self.node_list.append(node.clone())
+                if len(self.node_list) > 1:
+                    self.connect([-2, -1], [-1, 1])
         pass
 
     def initialize(self, flags, if_trun=True):
@@ -1024,22 +1060,64 @@ class TensorTrain_pack(TensorNetwork_pack):
 
     def get_norm(self):
         center_tn = self.node_list[self.center]
-        if self.center not in [0, self.length-1]:
-            norm = tc.einsum('nijk, nijk->n', center_tn, center_tn.conj())
-        else:
-            norm = tc.einsum('nijk, nijk->n', center_tn, center_tn.conj())
+        # if self.center not in [0, self.length-1]:
+        norm = tc.einsum('nijk, nijk->n', center_tn.detach(), center_tn.detach().conj())
+        # else:
+            # norm = tc.einsum('nijk, nijk->n', center_tn, center_tn.conj())
             # norm = tc.einsum('ij, ij->', center_tn, center_tn.conj())
         return norm.real
     
     def normalize(self):
         norm = self.get_norm()
         center_tn = self.node_list[self.center]
+        # 创建一个新的tensor，先复制原有的self.node_list[self.center]
+        new_tensor = self.node_list[self.center].clone()
+
+        # 然后对new_tensor进行赋值操作
         for i in range(norm.numel()):
-            self.node_list[self.center][i] = center_tn[i] / tc.sqrt(norm)[i]
+            # self.node_list[self.center][i] = center_tn[i] / tc.sqrt(norm)[i]
+            new_tensor[i] = center_tn[i] / tc.sqrt(norm)[i]
+        # 最后，将新的tensor赋值回self.node_list[self.center]
+        self.node_list[self.center] = new_tensor
         # self.node_list[self.center] = center_tn / tc.sqrt(norm)
 
+from torch.utils.data import Dataset, DataLoader
+class MPS_Dataset(Dataset, TensorTrain_pack):
+    def __init__(self, data:TensorTrain_pack) -> None:
+        super(Dataset, self).__init__(data.node_list, length=data.length,\
+                                        phydim=data.phydim, center=data.center,\
+                                        chi=data.chi, device=data.device,\
+                                        dtype=data.dtype, initialized=True)
+        # self.data = self.node_list
+    
+    def __len__(self):
+        return self.node_list[0].shape[0]
+    
+    def __getitem__(self, index) -> list:
+        item = list()
+        for i in range(self.length):
+            item.append(self.node_list[i][index])
+        return item
+
+
+def combine_mps_packs(mps1:TensorTrain_pack, mps2:TensorTrain_pack):
+    new_mps = copy_from_mps_pack(mps1)
+    mps2.move_center_to(mps1.center)
+    for i in range(mps2.length):
+        new_mps.node_list[i] = pad_and_cat([new_mps.node_list[i], mps2.node_list[i]], dim=0)
+    new_mps.trunc_error = pad_and_cat([new_mps.trunc_error, mps2.trunc_error], dim=0)
+    return new_mps
+
+def slice_mps_pack(mps:TensorTrain_pack, section:int):
+    new_mps = copy_from_mps_pack(mps)
+    for i in range(mps.length):
+        new_mps.node_list[i] = new_mps.node_list[i][:section]
+    if new_mps.trunc_error != 0:
+        new_mps.trunc_error = new_mps.trunc_error[:section]
+    return new_mps
+
 def rand_prod_mps_pack(number, length, chi, phydim=2, device=tc.device('cpu'), dtype=tc.complex64):
-    states = [tc.rand([number, phydim], dtype=dtype) for _ in range(length)]
+    states = [tc.rand([number, phydim], dtype=dtype, device=device) for _ in range(length)]
     for i in range(len(states)):
         site = states[i]
         norm = tc.sqrt(tc.einsum('ni, ni->n', site, site.conj()))
@@ -1069,6 +1147,26 @@ def inner_mps_pack(mps1:TensorTrain_pack, mps2:TensorTrain_pack):
         result.flatten((0, 1))
         result.merge_nodes((0, 1))
     return tc.squeeze(result.node_list[0])
+
+def multi_mags_from_mps_pack(mps:TensorTrain_pack, spins:list):
+    # mps_ = deepcopy(mps)
+    mags = tc.zeros((mps.node_list[0].shape[0], len(spins), mps.length), device=mps.device, dtype=mps.dtype)
+    num_spin = len(spins)
+    for i in range(mps.length):
+        mps.move_center_to(i)
+        center_tensor = mps.node_list[i]
+        for s in range(num_spin):
+            hz = tc.einsum('nijk, jl, nilk->n', center_tensor.conj(), spins[s], center_tensor)
+            mags[:, s, i] = hz
+    return mags
+
+def copy_from_mps_pack(mps:TensorTrain_pack):
+    new_node_list = []
+    for node in mps.node_list:
+        new_node_list.append(node.detach().clone())
+    new_mps = TensorTrain_pack(new_node_list, length=mps.length, phydim=mps.phydim, center=mps.phydim, chi=mps.chi, device=mps.device, dtype=mps.dtype, initialized=True)
+    new_mps.connect_graph = deepcopy(mps.connect_graph)
+    return new_mps
 
 if __name__ == '__main__':
     t1 = time.time()
