@@ -396,6 +396,34 @@ def tmul(x, y, pos_x=[], pos_y=[]):
     result = result.reshape(shape)
     return result
 
+def pad_and_cat(tensors, dim=0):
+    """
+    Catch several tensors at a given dimension, padding small dimensions at the same time.
+    """
+    # 找到拼接维度以外的每个维度的最大大小
+    max_sizes = list(tensors[0].shape)
+    for tensor in tensors[1:]:
+        for i in range(len(max_sizes)):
+            if i != dim:
+                max_sizes[i] = max(max_sizes[i], tensor.size(i))
+    
+    # 对每个张量进行填充
+    padded_tensors = []
+    for tensor in tensors:
+        padding = []
+        for i in range(len(max_sizes) - 1, -1, -1):
+            if i == dim:
+                padding.extend((0, 0))
+            else:
+                padding.extend((0, max_sizes[i] - tensor.size(i)))
+        padded_tensor = tc.nn.functional.pad(tensor, padding)
+        padded_tensors.append(padded_tensor)
+
+    # 沿指定维度拼接张量
+    result = tc.cat(padded_tensors, dim=dim)
+    return result
+
+
 if __name__ == '__main__':
     x = tc.tensor([[1, 0], [0, 1]])
     y = tc.tensor([[2, 10], [4, 5]])
