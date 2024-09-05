@@ -22,40 +22,38 @@ parser.add_argument('--gen_type', type=str, default='nn')
 parser.add_argument('--loss_type', type=str, default='multi_mags')
 parser.add_argument('--folder', type=str, default='rand_init/')
 parser.add_argument('--evol_mat_path', type=str, default="GraduationProject/Data/evol_mat.npy")
+parser.add_argument('--csv_path', type=str, default="GraduationProject/Data/output.npy")
 # parser.add_argument('--time_it', type=int, default="GraduationProject/Data/evol_mat.npy")
 args = parser.parse_args()
 evol_num = args.evol_num
 
-def write_to_csv(length, Jx, Jy, Jz, hx, hl, time_interval, evol_num, train_set_type, loss, gate_fidelity, csv_file_path):
-    new_data = dict()
-    new_data['length'] = [length]
-    new_data['Jx'] = [Jx]
-    new_data['Jy'] = [Jy]
-    new_data['Jz'] = [Jz]
-    new_data['hx'] = [hx]
-    new_data['hl'] = [hl]
-    new_data['time_interval'] = [time_interval]
-    new_data['sample_num'] = [1]
-    new_data['evol_num'] = [evol_num]
-    new_data['train_set_type'] = [train_set_type]
-    new_data['loss'] = [loss]
-    new_data['gate_fidelity'] = [gate_fidelity]
-    
-    new_df = pd.DataFrame(new_data)
+def write_to_csv(data, csv_file_path):
+    """
+    向CSV文件写入数据，可以指定接受的数据所对应的列。
+
+    参数:
+    data (dict): 要写入的数据字典，其中键为列名，值为对应的数据。
+    csv_file_path (str): CSV文件的路径。
+    """
+    # 将数据转换为 DataFrame
+    new_df = pd.DataFrame(data)
 
     # 检查文件是否存在
     if os.path.exists(csv_file_path):
         # 加载现有的 CSV 数据
         existing_data = pd.read_csv(csv_file_path)
 
-         # 将新数据与现有数据合并
-        combined_data = pd.concat([existing_data, new_df])
+        # 将新数据与现有数据合并
+        combined_data = pd.concat([existing_data, new_df], ignore_index=True)
         
         # 去重，保留最后出现的行
-        combined_data = combined_data.drop_duplicates(subset=['Jx', 'Jy', 'Jz', 'hx', 'hl', 'time_interval', 'sample_num', 'evol_num', 'train_set_type', 'loss'], keep='last')
+        combined_data = combined_data.drop_duplicates(
+            subset=list(data.keys()), keep='last'
+        )
     else:
         # 文件不存在，直接使用新数据
         combined_data = new_df
+    
     # 保存更新后的数据到 CSV 文件
     combined_data.to_csv(csv_file_path, index=False)
 
@@ -78,12 +76,30 @@ train_loss = results['train_loss']
 test_loss = results['test_loss']
 x = list(range(0, len(train_loss)))
 
+legends = []
+plt.plot(x, train_loss, label='train loss')
+plt.plot(x, test_loss, label= 'test loss')
+plt.legend()
+plt.xlabel('epochs')
+plt.ylabel('loss')
+plt.savefig(pic_path+'/loss_sample{:d}_evol{:d}.svg'.format(args.sample_num, args.evol_num))
+plt.close()
+
+legends = []
+plt.plot(x, train_fide, label='train fidelity')
+plt.plot(x, test_fide, label= 'test fidelity')
+plt.legend()
+plt.xlabel('epochs')
+plt.ylabel('fidelity')
+plt.savefig(pic_path+'/fidelity_sample{:d}_evol{:d}.svg'.format(args.sample_num, args.evol_num))
+plt.close()
+
 print('train_num={:d}\ntrain_loss:{:.4e}\ttest_loss:{:.4e}\ntrain_fide:{:.4e}\ttest_fide:{:.4e}\n'\
       .format(evol_num, train_loss[-1], test_loss[-1], train_fide[-1], test_fide[-1]))
 # 打开一个文件，如果不存在则创建，如果存在则追加内容
-with open(data_path+'/fin_loss_train_num.txt', 'a') as f:
-    f.write('train_num={:d}\ntrain_loss:{:.4e}\ttest_loss:{:.4e}\ntrain_fide:{:.4e}\ttest_fide:{:.4e}\n'\
-            .format(evol_num, train_loss[-1], test_loss[-1], train_fide[-1], test_fide[-1]))
+# with open(data_path+'/fin_loss_train_num.txt', 'a') as f:
+#     f.write('train_num={:d}\ntrain_loss:{:.4e}\ttest_loss:{:.4e}\ntrain_fide:{:.4e}\ttest_fide:{:.4e}\n'\
+#             .format(evol_num, train_loss[-1], test_loss[-1], train_fide[-1], test_fide[-1]))
 
 qc_mat = np.load(data_path+'/qc_mat_sample_{:d}_evol_{:d}.npy'.format(args.sample_num, args.evol_num))
 qc_mat = tc.from_numpy(qc_mat)
@@ -124,8 +140,8 @@ def spectrum(mat:tc.Tensor):
     energy, ind = tc.sort(energy)
     return energy
     
-qc_energy = spectrum(qc_mat)
-evol_energy = spectrum(evol_mat)
+qc_energy = spectrum(qc_mat) / args.time_interval
+evol_energy = spectrum(evol_mat) / args.time_interval
 diff = tc.sqrt(tc.sum(tc.square(qc_energy-evol_energy)))/qc_energy.shape[0]
 with open(data_path+'/spectrum_diff.txt', 'a') as f:
     f.write("{:.6e}\t{:d}\n".format(diff, evol_num))
@@ -135,28 +151,30 @@ if args.gen_type[0] == 'd':
     train_set_type = 'product'
 elif args.gen_type[0] == 'n':
     train_set_type = 'non_product'
-write_to_csv(length=args.length, Jx=args.Jx, Jy=args.Jy, Jz=args.Jz, hx=args.hx, hl=args.hl, \
-            time_interval=args.time_interval, evol_num=args.evol_num, \
-            train_set_type=train_set_type, loss=args.loss_type, \
-            gate_fidelity=float(gate_fidelity), csv_file_path='GraduationProject/Data/output.csv')
+elif args.gen_type == 'Z2':
+    train_set_type = 'Z2'
 
-legends = []
-plt.plot(x, train_loss, label='train loss')
-plt.plot(x, test_loss, label= 'test loss')
-plt.legend()
-plt.xlabel('epochs')
-plt.ylabel('loss')
-plt.savefig(pic_path+'/loss_num{:d}.svg'.format(args.evol_num))
-plt.close()
+data = {
+    'length': [args.length],
+    'Jx': [args.Jx],
+    'Jy': [args.Jy],
+    'Jz': [args.Jz],
+    'hx': [args.hx],
+    'hl': [args.hl],
+    'time_interval': [args.time_interval],
+    'evol_num': [args.evol_num],
+    'sample_num': [args.sample_num],
+    'train_set_type': [train_set_type],
+    'loss': [args.loss_type],
+    'gate_fidelity': [float(gate_fidelity)],
+    'spectrum_diff': [diff],
+    'train_loss': [train_loss[-1]],
+    'test_loss': [test_loss[-1]],
+    'train_fidelity': [train_fide[-1]],
+    'test_fidelity': [test_fide[-1]]
+}
 
-legends = []
-plt.plot(x, train_fide, label='train fidelity')
-plt.plot(x, test_fide, label= 'test fidelity')
-plt.legend()
-plt.xlabel('epochs')
-plt.ylabel('fidelity')
-plt.savefig(pic_path+'/fidelity_num{:d}.svg'.format(args.evol_num))
-plt.close()
+write_to_csv(data=data, csv_file_path=args.csv_path)
 
 legends = []
 plt.plot(qc_energy, label='qc')
@@ -164,7 +182,7 @@ plt.plot(evol_energy, label='Trotter')
 plt.legend()
 plt.xlabel('n')
 plt.ylabel('E*t')
-plt.savefig(pic_path+'/spectrum_num{:d}.svg'.format(args.evol_num))
+plt.savefig(pic_path+'/spectrum_sample{:d}_evol{:d}.svg'.format(args.sample_num, args.evol_num))
 plt.close()
 
 
