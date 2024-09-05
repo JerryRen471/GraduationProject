@@ -5,9 +5,24 @@ import numpy as np
 from Library.BasicFun import mkdir
 from Library import BasicFun as bf
 from Library import PhysModule as phy
+from Library import TensorNetwork as TN
 import random
 
 from rand_dir_and_nondir import random_uni_evl
+
+def mat_prod_states_evolution(mpss:TN.TensorTrain, gates:list, which_where:list)->TN.TensorTrain:
+    """Evolve the mps by several gates0.
+
+    :param state: initial state
+    :param gates: quantum gates
+    :param which_where: [which gate, which spin, which spin]
+    :return: evolved state
+    Example: which_where = [[0, 1, 2], [1, 0, 1]] means gate 0 on spins
+    1 and 2, and gate 1 on spins 0 and 1
+    """
+    def mat_prod_states_evolution_one_gate(v, g, pos):
+        pass
+
 
 def pure_states_evolution(states:tc.Tensor, gates:list, which_where:list)->tc.Tensor:
     """Evolve the state by several gates0.
@@ -186,6 +201,7 @@ if __name__ == '__main__':
     parser.add_argument('--J', type=float, default=1)
     parser.add_argument('--delta', type=float, default=1)
     parser.add_argument('--theta', type=float, default=0)
+    
     parser.add_argument('--seed', type=int, default=None)
     parser.add_argument('--sample_num', type=int, default=1)
     parser.add_argument('--evol_num', type=int, default=10)
@@ -258,7 +274,9 @@ if __name__ == '__main__':
     multi_mags = multi_mags_from_states(trainset)
     print(multi_mags.shape)
     s_label = 'xyz'
+    data = []
     for i in range(multi_mags.shape[2]):
+        data.append(multi_mags.cpu()[:, :, i])
         mkdir('GraduationProject/pics'+args.folder+f'/mag_evol{args.evol_num}')
         legend = []
         time_it = multi_mags.shape[0]
@@ -272,3 +290,33 @@ if __name__ == '__main__':
         plt.title(f'Average magnetic moment on site {i}')
         plt.savefig('GraduationProject/pics'+args.folder+f'/mag_evol{args.evol_num}/AverageMagneticMoment{i}.svg')
         plt.close()
+    # import torch
+    # import matplotlib.pyplot as plt
+    # from mpl_toolkits.mplot3d import Axes3D
+
+    # 颜色列表
+    colors = ['r', 'g', 'b', 'c', 'm', 'y', 'k', 'orange', 'purple']
+
+    # 创建3D图形
+    fig = plt.figure()
+    ax = fig.add_subplot(111, projection='3d')
+    legend = []
+    # 绘制每组数据
+    for i in range(9):
+        x = data[i][:, 0].numpy()
+        y = data[i][:, 1].numpy()
+        z = data[i][:, 2].numpy()
+        ax.scatter(x, y, z, c=colors[i], label=f'site {i+1}')
+
+    # 设置图例
+    ax.legend()
+
+    # 设置标签
+    ax.set_xlabel('Sx')
+    ax.set_ylabel('Sy')
+    ax.set_zlabel('Sz')
+    plt.title(f'Average magnetic moment')
+    plt.savefig('GraduationProject/pics'+args.folder+f'/mag_evol{args.evol_num}/3D_AverageMagneticMoment.svg')
+
+    # 显示图形
+    plt.close()
