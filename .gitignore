@@ -1,6 +1,18 @@
 **/__pycache__/
 **Data/**/*.npy
 **Data/**/*.pt
+# 忽略 Data 文件夹下的所有文件
+Data/*
+
+# 但不要忽略 .csv 文件
+!Data/*.csv
+
+# 忽略 Data 文件夹中的所有子文件夹及其内容
+Data/*/*
+
+# 如果子文件夹中也有 .csv 文件，不要忽略它们
+!Data/**/*.csv
+
 **/pics/
 *.sh
 *.out
