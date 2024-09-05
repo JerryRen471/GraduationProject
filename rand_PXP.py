@@ -75,7 +75,7 @@ def domain_wall(states, device=tc.device('cpu'), dtype=tc.complex64):
     sigma_z[0, 0] = 1 + 0.j
     sigma_z[1, 1] = -1 + 0.j
     mags_zz = n_combined_mags(states, 2, sigma_z)
-    domain_wall = tc.ones(mags_zz.shape[0], device=device, dtype=dtype) * (length-1)/2 + tc.sum(mags_zz, dim=[1, 2])
+    domain_wall = tc.ones(mags_zz.shape[0], device=device, dtype=dtype) * (length-1)/2 + tc.sum(mags_zz, dim=[1, 2]) / 2
     return domain_wall
 
 def fidelity_0_t(states):
@@ -86,7 +86,7 @@ def fidelity_0_t(states):
         fidelity = tc.einsum('a, a->', state_0.reshape(-1).conj(), states[i].reshape(-1))
         fide_sqare = fidelity.real**2 + fidelity.imag**2
         fidelity_list.append(fide_sqare)
-    return fidelity_list
+    return tc.tensor(fidelity_list)
 
 def rand_states(number:int, length:int, device=tc.device('cuda:0'), dtype=tc.complex128)->tc.Tensor:
     number = int(number)
@@ -164,7 +164,7 @@ if __name__ == '__main__':
     parser.add_argument('--evol_mat_path', type=str, default="GraduationProject/Data/evol_mat.npy")
     parser.add_argument('--gen_type', type=str, default='Z2')
     parser.add_argument('--time_interval', type=float, default=0.01)
-    parser.add_argument('--tau', type=float, default=0.01)
+    parser.add_argument('--tau', type=float, default=0.002)
     args = parser.parse_args()
 
     para = dict()
@@ -174,6 +174,7 @@ if __name__ == '__main__':
     para['spin'] = 'half'
     para['d'] = d
     para['dtype'] = dtype
+    para['tau'] = args.tau
 
     if args.seed != None:
         tc.manual_seed(args.seed)
@@ -192,7 +193,7 @@ if __name__ == '__main__':
     para_test = dict(para)
     para_test['time_tot'] = args.time_interval
     para_test['print_time'] = args.time_interval
-    para_test['sample_num'] = args.sample_num
+    para_test['sample_num'] = 100
 
     import os
     evol_mat_path = args.evol_mat_path
@@ -207,11 +208,11 @@ if __name__ == '__main__':
     np.save(evol_mat_path, evol_mat.cpu().T)
 
     gen_train = gen_select(para['gen_type'])
-    trainset = gen_train(args.sample_num, para['length'], device=para['device'], dtype=para['dtype'])
+    trainset = gen_train(para_train['sample_num'], para['length'], device=para['device'], dtype=para['dtype'])
     trainset, train_lbs = label_generate(trainset, para_train)
 
     gen_test = gen_select('d')
-    testset = gen_train(1, para['length'], device=para['device'], dtype=para['dtype'])
+    testset = gen_train(para_test['sample_num'], para['length'], device=para['device'], dtype=para['dtype'])
     testset, test_lbs = label_generate(testset, para_test)
     data = dict()
     data['train_set'] = trainset
@@ -222,11 +223,14 @@ if __name__ == '__main__':
     np.save(path+'/train_set_sample_{:d}_evol_{:d}'.format(args.sample_num, args.evol_num), data)
 
     print(f'trainset.shape = {trainset.shape}')
+
+    mkdir('GraduationProject/pics'+args.folder+f'/mag_evol{args.evol_num}')
+
     fidelity_evol = fidelity_0_t(trainset)
     legend = []
     time_it = len(fidelity_evol)
     x = np.array([_ for _ in range(time_it)]) * args.time_interval
-    y = np.array(fidelity_evol)
+    y = np.array(fidelity_evol.cpu())
     plt.plot(x, y, label='|\inner{\psi_0}{\psi}|^2')
     plt.legend()
     plt.xlabel('t')
@@ -236,7 +240,6 @@ if __name__ == '__main__':
     plt.close()
     domain_walls = domain_wall(trainset, device=para['device'], dtype=para['dtype'])
     print(f'domain_walls.shape = {domain_walls.shape}')
-    mkdir('GraduationProject/pics'+args.folder+f'/mag_evol{args.evol_num}')
     legend = []
     time_it = domain_walls.shape[0]
     x = np.array([_ for _ in range(time_it)]) * args.time_interval
