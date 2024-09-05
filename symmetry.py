@@ -87,13 +87,13 @@ def unfolding(spectrum):
 
 N = 14
 J = 1
-theta = 1
+theta = 0.5
 delta = 1
-# Jz = np.array([(delta+theta*(2*i-N)/(N-2)) for i in range(1, N)])
-Jz = np.ones((N))
+Jz = np.array([(delta+theta*(2*i-N)/(N-2)) for i in range(1, N)])
+# Jz = np.ones((N))
 print(Jz)
-hz = (np.random.rand((N)) - 0.5)
-# hz = np.zeros((N))
+# hz = (np.random.rand((N)) - 0.5)
+hz = np.zeros((N))
 hl = 0
 hz[0] += hl
 print(hz)
