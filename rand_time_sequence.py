@@ -248,7 +248,7 @@ if __name__ == '__main__':
     import os
     evol_mat_path = args.evol_mat_path
     # if os.access(evol_mat_path, os.F_OK):
-    #     pass
+    #     p555555
     # else:
     E = tc.eye(2**para['length'], dtype=tc.complex128, device=para['device'])
     shape_ = [E.shape[0]] + [2] * para['length']
@@ -272,18 +272,18 @@ if __name__ == '__main__':
     
     np.save(path+'/train_set_sample_{:d}_evol_{:d}'.format(args.sample_num, args.evol_num), data)
 
-    from Library.PhysModule import multi_mags_from_states
-    multi_mags = multi_mags_from_states(trainset)
-    print(multi_mags.shape)
-    s_label = 'xyz'
-    for i in range(multi_mags.shape[2]):
-        time_it = multi_mags.shape[0]
-        x = np.array([_ for _ in range(time_it)]) * args.interval
-        for j in range(3):
-            y = np.array(multi_mags.cpu()[:, j, i], label='s'+s_label[j])
-            plt.plot(x, y)
-        plt.legend()
-        plt.xlabel('t')
-        plt.ylabel('si')
-        plt.title(f'Average magnetic moment on site {i}')
-        plt.savefig('GraduationProject/pics'+args.folder+f'AverageMagneticMoment{i}.svg')
+    # from Library.PhysModule import multi_mags_from_states
+    # multi_mags = multi_mags_from_states(trainset)
+    # print(multi_mags.shape)
+    # s_label = 'xyz'
+    # for i in range(multi_mags.shape[2]):
+    #     time_it = multi_mags.shape[0]
+    #     x = np.array([_ for _ in range(time_it)]) * args.time_interval
+    #     for j in range(3):
+    #         y = np.array(multi_mags.cpu()[:, j, i], label='s'+s_label[j])
+    #         plt.plot(x, y)
+    #     plt.legend()
+    #     plt.xlabel('t')
+    #     plt.ylabel('si')
+    #     plt.title(f'Average magnetic moment on site {i}')
+    #     plt.savefig('GraduationProject/pics'+args.folder+f'AverageMagneticMoment{i}.svg')
