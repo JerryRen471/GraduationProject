@@ -24,34 +24,34 @@ parser.add_argument('--evol_mat_path', type=str, default="GraduationProject/Data
 args = parser.parse_args()
 evol_num = args.evol_num
 
-def write_to_csv(length, J, delta, theta, time_interval, evol_num, train_set_type, loss, gate_fidelity, csv_file_path):
-    new_data = dict()
-    new_data['J'] = [J]
-    new_data['delta'] = [delta]
-    new_data['theta'] = [theta]
-    new_data['time_interval'] = [time_interval]
-    new_data['sample_num'] = [1]
-    new_data['evol_num'] = [evol_num]
-    new_data['train_set_type'] = [train_set_type]
-    new_data['loss'] = [loss]
-    new_data['gate_fidelity'] = [gate_fidelity]
-    new_data['length'] = [length]
-    
-    new_df = pd.DataFrame(new_data)
+def write_to_csv(data, csv_file_path, subset):
+    """
+    向CSV文件写入数据，可以指定接受的数据所对应的列。
+
+    参数:
+    data (dict): 要写入的数据字典，其中键为列名，值为对应的数据。
+    csv_file_path (str): CSV文件的路径。
+    """
+    # 将数据转换为 DataFrame
+    new_df = pd.DataFrame(data)
 
     # 检查文件是否存在
     if os.path.exists(csv_file_path):
         # 加载现有的 CSV 数据
         existing_data = pd.read_csv(csv_file_path)
 
-         # 将新数据与现有数据合并
-        combined_data = pd.concat([existing_data, new_df])
-        
+        # 将新数据与现有数据合并
+        combined_data = pd.concat([existing_data, new_df], ignore_index=True)
         # 去重，保留最后出现的行
-        combined_data = combined_data.drop_duplicates(subset=['J', 'delta', 'theta', 'time_interval', 'sample_num', 'evol_num', 'train_set_type', 'loss'], keep='last')
+        combined_data = combined_data.drop_duplicates(
+            subset=subset, keep='last'
+        )
+        combined_data = combined_data.sort_values(subset)
+
     else:
         # 文件不存在，直接使用新数据
         combined_data = new_df
+    
     # 保存更新后的数据到 CSV 文件
     combined_data.to_csv(csv_file_path, index=False)
 
@@ -62,6 +62,7 @@ mkdir(data_path)
 mkdir(pic_path)
 
 results = np.load(data_path+'/adqc_result_sample_{:d}_evol_{:d}.npy'.format(args.sample_num, args.evol_num), allow_pickle=True) # results是字典, 包含'train_pred', 'test_pred', 'train_loss', 'test_loss'
+os.remove(data_path+'/adqc_result_sample_{:d}_evol_{:d}.npy'.format(args.sample_num, args.evol_num))
 results = results.item()
 train_pred = results['train_pred']
 test_pred = results['test_pred']
@@ -86,6 +87,8 @@ qc_mat = tc.from_numpy(qc_mat)
 evol_mat = np.load(evol_mat_path)
 evol_mat = tc.from_numpy(evol_mat)
 print('\nevol_mat.shape is', evol_mat.shape)
+os.remove(data_path+'/qc_mat_sample_{:d}_evol_{:d}.npy'.format(args.sample_num, args.evol_num))
+os.remove(evol_mat_path)
 print('\nqc_mat.shape is', qc_mat.shape)
 
 # gate fidelity
@@ -131,10 +134,26 @@ if args.gen_type[0] == 'd':
     train_set_type = 'product'
 elif args.gen_type[0] == 'n':
     train_set_type = 'non_product'
-write_to_csv(length=args.length, J=args.J, delta=args.delta, theta=args.theta, \
-            time_interval=args.time_interval, evol_num=args.evol_num, \
-            train_set_type=train_set_type, loss=args.loss_type, \
-            gate_fidelity=float(gate_fidelity), csv_file_path='GraduationProject/Data/XXZ_inhomo.csv')
+
+data = {
+    'length': [int(args.length)],
+    'J': [float(args.J)],
+    'delta': [float(args.delta)],
+    'theta': [float(args.theta)],
+    'time_interval': [args.time_interval],
+    'evol_num': [int(args.evol_num)],
+    'sample_num': [int(args.sample_num)],
+    'train_set_type': [train_set_type],
+    'loss': [args.loss_type],
+    'gate_fidelity': [float(gate_fidelity)],
+    'spectrum_diff': [float(diff)],
+    'train_loss': [train_loss[-1]],
+    'test_loss': [test_loss[-1]],
+    'similarity': [float(similarity)]
+}
+
+subset=['J', 'delta', 'theta', 'train_set_type', 'loss', 'length', 'time_interval', 'evol_num', 'sample_num']
+write_to_csv(data, csv_file_path='GraduationProject/Data/XXZ_inhomo.csv', subset=subset)
 
 legends = []
 plt.plot(x, train_loss, label='train loss')
