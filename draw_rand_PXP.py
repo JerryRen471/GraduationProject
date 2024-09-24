@@ -1,6 +1,7 @@
 import os
 import torch as tc
 import numpy as np
+import scipy.linalg
 from Library.BasicFun import mkdir
 from Library import PhysModule as phy
 from matplotlib import pyplot as plt
@@ -10,13 +11,14 @@ import argparse
 parser = argparse.ArgumentParser(description='manual to this script')
 # parser.add_argument('--seed', type=int, default=100)
 parser.add_argument('--length', type=int, default=10)
-parser.add_argument('--time_interval', type=float, default=0.01)
+parser.add_argument('--time_interval', type=float, default=0.02)
 parser.add_argument('--sample_num', type=int, default=1)
-parser.add_argument('--evol_num', type=int, default=10)
+parser.add_argument('--evol_num', type=int, default=4)
 parser.add_argument('--gen_type', type=str, default='Z2')
-parser.add_argument('--loss_type', type=str, default='multi_mags')
-parser.add_argument('--folder', type=str, default='rand_init/')
-parser.add_argument('--evol_mat_path', type=str, default="GraduationProject/Data/evol_mat.npy")
+parser.add_argument('--entangle_dim', type=int, default=1)
+parser.add_argument('--loss_type', type=str, default='fidelity')
+parser.add_argument('--folder', type=str, default='/PXP/length10/loss_fidelity/0.02/Z2')
+parser.add_argument('--evol_mat_path', type=str, default="/data/home/scv7454/run/GraduationProject/Data/PXP/length10evol_mat4.npy")
 # parser.add_argument('--time_it', type=int, default="GraduationProject/Data/evol_mat.npy")
 args = parser.parse_args()
 evol_num = args.evol_num
@@ -59,6 +61,7 @@ mkdir(data_path)
 mkdir(pic_path)
 
 results = np.load(data_path+'/adqc_result_sample_{:d}_evol_{:d}.npy'.format(args.sample_num, args.evol_num), allow_pickle=True) # results是字典, 包含'train_pred', 'test_pred', 'train_loss', 'test_loss'
+# os.remove(data_path+'/adqc_result_sample_{:d}_evol_{:d}.npy'.format(args.sample_num, args.evol_num))
 results = results.item()
 train_pred = results['train_pred']
 test_pred = results['test_pred']
@@ -98,8 +101,10 @@ plt.close()
 
 qc_mat = np.load(data_path+'/qc_mat_sample_{:d}_evol_{:d}.npy'.format(args.sample_num, args.evol_num))
 qc_mat = tc.from_numpy(qc_mat)
+# os.remove(data_path+'/qc_mat_sample_{:d}_evol_{:d}.npy'.format(args.sample_num, args.evol_num))
 evol_mat = np.load(evol_mat_path)
 evol_mat = tc.from_numpy(evol_mat)
+# os.remove(evol_mat_path)
 print('\nevol_mat.shape is', evol_mat.shape)
 print('\nqc_mat.shape is', qc_mat.shape)
 
@@ -142,30 +147,93 @@ with open(data_path+'/spectrum_diff.txt', 'a') as f:
     f.write("{:.6e}\t{:d}\n".format(diff, evol_num))
     pass
 
+try:
+    qc_mat_np = qc_mat.numpy()
+    evol_mat_np = evol_mat.numpy()
+    H_qc = scipy.linalg.logm(qc_mat_np)/ 1.j / args.time_interval
+    H_evol = scipy.linalg.logm(evol_mat_np)/ 1.j / args.time_interval
+    
+    plt.imshow(np.abs(H_qc), cmap='hot', interpolation='nearest', vmin=np.min(np.abs(H_qc)), vmax=np.max(np.abs(H_evol)))
+    plt.colorbar(label='Absolute Value')
+    plt.xlabel('Column Index')
+    plt.ylabel('Row Index')
+    plt.title('Heatmap of H_qc')
+    plt.savefig(pic_path+'/H_qc_heatmap_num{:d}.svg'.format(args.evol_num))
+    plt.close()
+
+    plt.imshow(np.abs(H_evol), cmap='hot', interpolation='nearest', vmin=np.min(np.abs(H_qc)), vmax=np.max(np.abs(H_evol)))
+    plt.colorbar(label='Absolute Value')
+    plt.xlabel('Column Index')
+    plt.ylabel('Row Index')
+    plt.title('Heatmap of H_evol')
+    plt.savefig(pic_path+'/H_evol_heatmap_num{:d}.svg'.format(args.evol_num))
+    plt.close()
+
+    abs_diff = np.abs(H_qc - H_evol)
+    plt.imshow(abs_diff, cmap='hot', interpolation='nearest')
+    plt.colorbar(label='Absolute Difference Value')
+    plt.xlabel('Column Index')
+    plt.ylabel('Row Index')
+    plt.title('Heatmap of Absolute Difference')
+    plt.savefig(pic_path+'/abs_diff_heatmap_num{:d}.svg'.format(args.evol_num))
+    plt.close()
+    
+    abs_diff_vector = abs_diff.flatten()
+    abs_diff_vector_sorted = np.sort(abs_diff_vector)
+
+    plt.plot(abs_diff_vector_sorted)
+    plt.xlabel('Index')
+    plt.ylabel('Absolute Difference')
+    plt.savefig(pic_path+'/abs_diff_vector_sorted_num{:d}.svg'.format(args.evol_num))
+    plt.close()
+    # 计算np.abs(H_qc-H_evol)的平均值
+    mean_value = np.mean(abs_diff)
+    H_diff = np.mean(abs_diff)
+    # 计算np.abs(H_qc-H_evol)的方差
+    variance_value = np.var(abs_diff)
+    # 计算np.abs(H_qc-H_evol)的最大值
+    max_value = np.max(abs_diff)
+    # 计算np.abs(H_qc-H_evol)的最小值
+    min_value = np.min(abs_diff)
+    # 计算np.abs(H_qc-H_evol)的中位数
+    median_value = np.median(abs_diff)
+except Exception as e:
+    print(e)
+    H_diff = -1
+print('mean_value=', mean_value)
+print('variance_value=', variance_value)
+print('max_value=', max_value)
+print('min_value=', min_value)
+print('median_value=', median_value)
+ 
 if args.gen_type[0] == 'd':
     train_set_type = 'product'
 elif args.gen_type[0] == 'n':
     train_set_type = 'non_product'
 elif args.gen_type == 'Z2':
     train_set_type = 'Z2'
+elif args.gen_type == 'entangled':
+    train_set_type = 'entangled'
 
 data = {
-    'length': [args.length],
+    'length': [int(args.length)],
     'time_interval': [args.time_interval],
-    'evol_num': [args.evol_num],
-    'sample_num': [args.sample_num],
+    'evol_num': [int(args.evol_num)],
+    'sample_num': [int(args.sample_num)],
     'train_set_type': [train_set_type],
+    'entangle_dim': [int(args.entangle_dim)],
     'loss': [args.loss_type],
     'gate_fidelity': [float(gate_fidelity)],
     'spectrum_diff': [float(diff)],
+    'H_diff': [float(H_diff)],
     'train_loss': [train_loss[-1]],
     'test_loss': [test_loss[-1]],
     'train_fidelity': [train_fide[-1]],
     'test_fidelity': [test_fide[-1]]
 }
 
-subset=['train_set_type', 'loss', 'length', 'time_interval', 'evol_num', 'sample_num']
-write_to_csv(data=data, csv_file_path='GraduationProject/Data/PXP.csv', subset=subset)
+subset=['train_set_type', 'loss', 'length', 'time_interval', 'evol_num', 'sample_num', 'entangle_dim']
+write_to_csv(data=data, csv_file_path='/data/home/scv7454/run/GraduationProject/Data/PXP_tmp.csv', subset=subset)
 
 legends = []
 plt.plot(qc_energy, label='qc')
