@@ -66,6 +66,7 @@ path = 'GraduationProject/Data'+args.folder
 mkdir(path)
 data = np.load(path+'/train_set_sample_{:d}_evol_{:d}.npy'.format(args.sample_num, args.evol_num), allow_pickle=True)
 data = data.item()
+os.remove(path+'/train_set_sample_{:d}_evol_{:d}.npy'.format(args.sample_num, args.evol_num))
 
 print(data['train_set'].dtype)
 
@@ -74,6 +75,7 @@ old_qc_path = search_qc(folder_path=path, evol_num=args.evol_num)
 print(old_qc_path)
 if old_qc_path != None:
     qc.load_state_dict(tc.load(path + '/' + old_qc_path), strict=False)
+    os.remove(path + '/' + old_qc_path)
 qc, results_adqc, para_adqc = ADQC.train(qc, data, para_adqc)
 np.save(path+'/adqc_result_sample_{:d}_evol_{:d}'.format(args.sample_num, args.evol_num), results_adqc)
 
