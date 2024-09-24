@@ -61,7 +61,7 @@ mkdir(data_path)
 mkdir(pic_path)
 
 results = np.load(data_path+'/adqc_result_sample_{:d}_evol_{:d}.npy'.format(args.sample_num, args.evol_num), allow_pickle=True) # results是字典, 包含'train_pred', 'test_pred', 'train_loss', 'test_loss'
-# os.remove(data_path+'/adqc_result_sample_{:d}_evol_{:d}.npy'.format(args.sample_num, args.evol_num))
+os.remove(data_path+'/adqc_result_sample_{:d}_evol_{:d}.npy'.format(args.sample_num, args.evol_num))
 results = results.item()
 train_pred = results['train_pred']
 test_pred = results['test_pred']
@@ -101,10 +101,10 @@ plt.close()
 
 qc_mat = np.load(data_path+'/qc_mat_sample_{:d}_evol_{:d}.npy'.format(args.sample_num, args.evol_num))
 qc_mat = tc.from_numpy(qc_mat)
-# os.remove(data_path+'/qc_mat_sample_{:d}_evol_{:d}.npy'.format(args.sample_num, args.evol_num))
+os.remove(data_path+'/qc_mat_sample_{:d}_evol_{:d}.npy'.format(args.sample_num, args.evol_num))
 evol_mat = np.load(evol_mat_path)
 evol_mat = tc.from_numpy(evol_mat)
-# os.remove(evol_mat_path)
+os.remove(evol_mat_path)
 print('\nevol_mat.shape is', evol_mat.shape)
 print('\nqc_mat.shape is', qc_mat.shape)
 
