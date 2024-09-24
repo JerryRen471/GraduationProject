@@ -187,7 +187,7 @@ if __name__ == '__main__':
     parser.add_argument('--dot_size', type=int, default=3)
     parser.add_argument('--length', type=int, default=10)
     parser.add_argument('--alpha', type=float, default=1)
-    parser.add_argument('--seed', type=int, default=None)
+    parser.add_argument('--seed', type=int, default=99)
     parser.add_argument('--sample_num', type=int, default=1)
     parser.add_argument('--evol_num', type=int, default=10)
     parser.add_argument('--test_num', type=int, default=500)
@@ -211,6 +211,7 @@ if __name__ == '__main__':
 
     if args.seed != None:
         tc.manual_seed(args.seed)
+        tc.cuda.manual_seed(args.seed)
 
     path = 'GraduationProject/Data'+args.folder
     from Library.BasicFun import mkdir
