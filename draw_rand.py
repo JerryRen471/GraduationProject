@@ -27,7 +27,7 @@ parser.add_argument('--csv_path', type=str, default="GraduationProject/Data/outp
 args = parser.parse_args()
 evol_num = args.evol_num
 
-def write_to_csv(data, csv_file_path):
+def write_to_csv(data, csv_file_path, subset):
     """
     向CSV文件写入数据，可以指定接受的数据所对应的列。
 
@@ -45,10 +45,11 @@ def write_to_csv(data, csv_file_path):
 
         # 将新数据与现有数据合并
         combined_data = pd.concat([existing_data, new_df], ignore_index=True)
-        
+        combined_data = combined_data.sort_values(subset)
+
         # 去重，保留最后出现的行
         combined_data = combined_data.drop_duplicates(
-            subset=list(data.keys()), keep='last'
+            subset=subset, keep='last'
         )
     else:
         # 文件不存在，直接使用新数据
@@ -167,7 +168,7 @@ data = {
     'train_set_type': [train_set_type],
     'loss': [args.loss_type],
     'gate_fidelity': [float(gate_fidelity)],
-    'spectrum_diff': [diff],
+    'spectrum_diff': [float(diff)],
     'train_loss': [train_loss[-1]],
     'test_loss': [test_loss[-1]],
     'train_fidelity': [train_fide[-1]],
