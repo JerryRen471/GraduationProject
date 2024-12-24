@@ -169,7 +169,7 @@ def train(qc, data:dict, para:dict):
     para0['feature_map'] = 'cossin'  # 特征映射
     para0['lattice'] = 'brick'  # ADQC链接形式（brick或stair）
     para0['depth'] = 4  # ADQC层数
-    para0['ini_way'] = 'random'  # 线路初始化策略
+    para0['ini_way'] = 'indentity'  # 线路初始化策略
     para0['lr'] = 2e-2  # 初始学习率
     para0['it_time'] = 1000  # 迭代次数
     para0['print_time'] = 10  # 打印间隔

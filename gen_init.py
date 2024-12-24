@@ -23,7 +23,7 @@ def rand_dir_prod_states(number:int, length:int, device=tc.device('cuda:0'), dty
     for _ in range(length - 1):
         states = tc.einsum('ij,ik->ijk', states, tc.rand(shape, dtype=dtype, device=device))
         states = states.reshape(number, -1)
-    print(states.shape)
+    # print(states.shape)
     shape_ = [number] + [2]*length
     norm = tc.sum(states * states.conj(), dim=1, keepdim=True)
     states = states / tc.sqrt(norm)

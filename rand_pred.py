@@ -68,8 +68,6 @@ data = np.load(path+'/train_set_sample_{:d}_evol_{:d}.npy'.format(args.sample_nu
 data = data.item()
 os.remove(path+'/train_set_sample_{:d}_evol_{:d}.npy'.format(args.sample_num, args.evol_num))
 
-print(data['train_set'].dtype)
-
 qc = ADQC.ADQC(para_adqc)
 old_qc_path = search_qc(folder_path=path, evol_num=args.evol_num)
 print(old_qc_path)

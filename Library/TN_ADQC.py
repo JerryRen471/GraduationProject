@@ -121,7 +121,7 @@ def VQC(para=None):
     qc.single_state = False  # 切换至多个态演化模式
     return qc
 
-from torchviz import make_dot
+# from torchviz import make_dot
 
 def train(qc:ADQC_LatentGates, data:dict, para:dict):
     """用data按照para的设定对qc进行训练
@@ -187,7 +187,7 @@ def train(qc:ADQC_LatentGates, data:dict, para:dict):
         loss.backward() # backward过程中梯度是none
 
         # 2. 如果loss不是nan,那么说明forward过程没问题，可能是梯度爆炸，所以用梯度裁剪试试
-        tc.nn.utils.clip_grad_norm_(qc.parameters(), 3, norm_type=2)
+        # tc.nn.utils.clip_grad_norm_(qc.parameters(), 3, norm_type=2)
 
         # 3.1 在step之前，判断参数是不是nan, 如果不是判断step之后是不是nan
         # assert tc.isnan(qc.layers).sum() == 0, print(qc.layers)

@@ -634,6 +634,21 @@ class TensorNetwork_pack():
         return d  # 如果没有找到这样的列，返回 tensor 的总列数
 
     def split_node(self, node_idx:int, legs_group:list, group_side:str='L', if_trun=True):
+        '''
+        将局域张量按照 legs_group 分组，group_side 指定分组给出的指标在左边还是右边，剩下的指标分给对应的一边。如 group_side 为 'L' ，则将 legs_group 分在左边，局域张量剩下的指标分在右边。
+        处理的结果是将 node_idx 对应的局域张量分解为三个局域张量 u, s, v，其中 s 为对角矩阵，u中间的指标对应分组为左边的指标，v 中间的指标对应分组为右边的指标。
+              L         R\n
+            ┌────┐    ┌────┐\n
+            │    │    │    │                     L                      R\n
+            │    │    │    │\n
+             │  │      │  │                     │  │                   │  │\n
+           ┌─┴──┴──────┴──┴─┐                 ┌─┴──┴─┐   ┌──────┐    ┌─┴──┴─┐\n
+           │                │                 │      │   │      │    │      │\n
+        ───┤                ├──   ─────►   ───┤  u   ├───┤  s   ├────┤  v   ├──\n
+           │                │                 │      │   │      │    │      │\n
+           └────────────────┘                 └──────┘   └──────┘    └──────┘\n
+        '''
+
         if node_idx < 0:
             node_idx = node_idx + len(self.node_list)
         node = self.node_list[node_idx]
@@ -655,7 +670,7 @@ class TensorNetwork_pack():
             dimL = dimL * dims[i]
         perm = [0] + legs_L[:] + legs_R[:]
         node = node.permute(perm)
-        node = node + tc.randn(node.shape, dtype=node.dtype, device=node.device)*1e-10
+        node = node + tc.randn(node.shape, dtype=node.dtype, device=node.device)*1e-10     
         u, s, v = tc.linalg.svd(node.reshape(dims[0], dimL, -1), full_matrices=False)
         # Deal with the near zero singular values.
         # If not may lead to infinite gradients!!!
@@ -737,7 +752,7 @@ class TensorNetwork_pack():
 
 
 class TensorTrain(TensorNetwork):
-    def __init__(self, tensors:list, length:int, phydim:int=2, center:int=-1, chi=None, device=tc.device('cpu'), dtype=tc.complex64):
+    def __init__(self, tensors:list, length:int, phydim:int=2, center:int=-1, chi=None, initialize=True, device=tc.device('cpu'), dtype=tc.complex64):
         super().__init__(chi=chi, device=device, dtype=dtype)
 
         self.length = length
@@ -900,7 +915,7 @@ class TensorTrain(TensorNetwork):
         self.node_list[self.center] = center_tn / tc.sqrt(norm)
 
 class TensorTrain_pack(TensorNetwork_pack):
-    def __init__(self, tensor_packs:list, length:int, phydim:int=2, center:int=-1, chi=None, device=tc.device('cpu'), dtype=tc.complex64, initialized=False):
+    def __init__(self, tensor_packs:list, length:int, phydim:int=2, center:int=-1, chi=None, device=tc.device('cpu'), dtype=tc.complex64, initialize=True):
         """
         tensor_packs: 包含多个局域张量的列表，列表中每一个元素(tensor)对应在该位置的n个局域张量，tensor[i].shape=[mps态的个数, 局域张量的形状]
         """
@@ -917,7 +932,7 @@ class TensorTrain_pack(TensorNetwork_pack):
         # center_reletive = self.center
         tensor = tensor_packs[0]
         flags = [tensor.dim()-2]
-        if initialized == False:
+        if initialize == True:
             tensor = tc.unsqueeze(tensor, 1)
             tensor = tc.unsqueeze(tensor, -1)
             self.add_node(tensor, device=device, dtype=dtype)
@@ -1029,6 +1044,9 @@ class TensorTrain_pack(TensorNetwork_pack):
         pass
 
     def act_two_body_gate(self, gate, pos):
+        '''
+        
+        '''
         gr = tc.eye(self.phydim**2, device=self.device, dtype=self.dtype).reshape(
             [self.phydim]*4).permute(0, 2, 3, 1).reshape(self.phydim, self.phydim**2, self.phydim)
         gl = gate.reshape([self.phydim]*4).permute(0, 1, 3, 2).reshape(self.phydim, self.phydim**2, self.phydim)
@@ -1048,13 +1066,16 @@ class TensorTrain_pack(TensorNetwork_pack):
         self.merge_nodes((pos[1], pos[1]+1), is_gate=(True, False))
         self.flatten(tuple(pos))
         i = pos[0]
-        self.split_node(i, legs_group=[-1], group_side='R', if_trun=False)
-        self.merge_nodes((i+1, i+2))
-        self.merge_nodes((i+1, i+2))
-        self.split_node(i+1, legs_group=[1], group_side='L', if_trun=True)
         self.merge_nodes((i, i+1))
-        self.merge_nodes((i, i+1))
-        self.center = i
+        self.split_node(i, legs_group=[1, 2], group_side='L', if_trun=True)
+        self.merge_nodes((i+1, i+2))
+        # self.split_node(i, legs_group=[-1], group_side='R', if_trun=False)
+        # self.merge_nodes((i+1, i+2))
+        # self.merge_nodes((i+1, i+2))
+        # self.split_node(i+1, legs_group=[1], group_side='L', if_trun=True)
+        # self.merge_nodes((i, i+1))
+        # self.merge_nodes((i, i+1))
+        self.center = i+1
         self.normalize()
         return self
 

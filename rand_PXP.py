@@ -157,7 +157,7 @@ def rand_entangled_states(number:int, length:int, entangle_dim:int, device=tc.de
 def gen_select(gen_type:str):
     if gen_type == 'product' or gen_type == 'd':
         gen = rand_dir_prod_states
-    elif gen_type == 'n':
+    elif gen_type == 'n' or gen_type == 'non_product':
         gen = rand_states
     elif gen_type == 'Z2':
         gen = Z2_states
@@ -193,7 +193,7 @@ if __name__ == '__main__':
     parser.add_argument('--evol_mat_path', type=str, default="GraduationProject/Data/evol_mat.npy")
     parser.add_argument('--gen_type', type=str, default='Z2')
     parser.add_argument('--time_interval', type=float, default=0.01)
-    parser.add_argument('--tau', type=float, default=0.002)
+    parser.add_argument('--tau', type=float, default=0.02)
     args = parser.parse_args()
 
     para = dict()

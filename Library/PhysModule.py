@@ -1,7 +1,7 @@
 import torch as tc
 import numpy as np
 from Library import BasicFun as bf
-
+from qiskit.quantum_info import Clifford, random_clifford
 
 def spin_operators(spin, if_list=False, device='cpu', dtp=tc.complex128):
     op = dict()
@@ -14,8 +14,8 @@ def spin_operators(spin, if_list=False, device='cpu', dtp=tc.complex128):
         op['sd'] = tc.zeros((2, 2), device=device, dtype=dtp)
         op['sx'][0, 1] = 0.5
         op['sx'][1, 0] = 0.5
-        op['sy'][0, 1] = 0.5 * 1j
-        op['sy'][1, 0] = -0.5 * 1j
+        op['sy'][0, 1] = -0.5 * 1j
+        op['sy'][1, 0] = 0.5 * 1j
         op['sz'][0, 0] = 0.5
         op['sz'][1, 1] = -0.5
         op['su'][0, 1] = 1.0
@@ -187,6 +187,26 @@ def multi_mags_from_states(states, spins=None, device='cpu'):
     multi_mags = n_combined_mags(states, n=1, which_ops=spins)
     return multi_mags
 
+def measure(state):
+    shape = state.shape
+    state = state.reshape(-1)
+    probabilities = tc.abs(state) ** 2
+    # 根据概率分布进行测量
+    measured_index = tc.multinomial(probabilities, 1).item()  # 进行测量
+    measured_state = tc.zeros_like(state)
+    measured_state[measured_index] = 1  # 设置对应的量子态为1
+
+    return measured_state.reshape(shape)
+
+# def multi_mags_from_states_sample(states, sample_time:int, spins=None, device='cpu'):
+#     count_state = tc.zeros_like(states)
+#     for i in range(sample_time):
+#         measured_state = measure(states)
+#         count_state = count_state + measured_state
+#     mean_mags = [cal_mean_mag_on_site_index(count_state=count_state, i=k) for k in range(n_qubit)]
+
+#     return multi_mags
+
 def combined_mags(states, which_ops=None):
     '''
     para:: states states.shape = [num_of_states, shape_of_each_state]
@@ -311,3 +331,128 @@ def rand_id(shape, dim, dtype, device):
     for n in reversed(shape):
         id = tc.stack(list(id for _ in range(n)))
     return id
+
+def get_quantum_gates_and_qubits(qc):
+    gates_info = []
+    for gate in qc.data:
+        gate_name = gate.name  # 获取量子门的名称
+        qubits = gate.qubits  # 获取作用的比特
+        gates_info.append((gate_name, [qc.qubits.index(qubit) for qubit in qubits]))  # 记录量子门及其作用的比特索引
+    return gates_info
+
+def convert_qiskit_circuit_to_usual_gates(qiskit_circuit, dtype=tc.complex64, device=tc.device('cpu')):
+    x_gate = tc.tensor([[0, 1], [1, 0]], dtype=dtype, device=device)
+    y_gate = tc.tensor([[0, -1j], [1j, 0]], dtype=dtype, device=device)
+    z_gate = tc.tensor([[1, 0], [0, -1]], dtype=dtype, device=device)
+    s_gate = tc.tensor([[1, 0], [0, 1j]], dtype=dtype, device=device)
+    sdg_gate = tc.tensor([[1, 0], [0, -1j]], dtype=dtype, device=device)
+    h_gate = tc.tensor([[1/(2**0.5), 1/(2**0.5)], [1/(2**0.5), -1/(2**0.5)]], dtype=dtype, device=device)
+
+    cnot_gate = tc.tensor([[1, 0, 0, 0], [0, 1, 0, 0], [0, 0, 0, 1], [0, 0, 1, 0]], dtype=dtype, device=device).reshape(2, 2, 2, 2)
+    swap_gate = tc.tensor([[1, 0, 0, 0], [0, 0, 1, 0], [0, 1, 0, 0], [0, 0, 0, 1]], dtype=dtype, device=device).reshape(2, 2, 2, 2)
+
+    gate_dict = {
+        'x': x_gate,
+        'y': y_gate,
+        'z': z_gate,
+        's': s_gate,
+        'sdg': sdg_gate,
+        'h': h_gate,
+        'cx': cnot_gate,
+        'swap': swap_gate
+    }
+
+    gates_info = get_quantum_gates_and_qubits(qiskit_circuit)
+    gate_list = list(gate_dict.values())
+    gate_names = list(gate_dict.keys())
+
+    which_where = []
+    for gate_name, qubit_indices in gates_info:
+        # print(f"Gate: {gate_name}, Qubits: {qubit_indices}")
+        which_where.append([gate_names.index(gate_name)] + qubit_indices)
+    
+    return gate_names, gate_list, which_where
+
+def pure_states_evolution_one_gate(v, g, pos):
+    ind = list(range(len(pos), 2*len(pos)))
+    pos = [_+1 for _ in pos]
+    # print("v.dtype",v.dtype)
+    # print("g.dtype",g.dtype)
+    v = tc.tensordot(v, g, [pos, ind]) # 对每个pos加一
+    ind0 = list(range(v.ndimension()))
+    for nn in range(len(pos)):
+        ind0.remove(pos[nn])
+    ind0 += pos
+    order = np.argsort(ind0)
+    return v.permute(tuple(order))
+
+def pure_states_evolution(states:tc.Tensor, gates:list, which_where:list)->tc.Tensor:
+    """Evolve the state by several gates0.
+
+    :param state: initial state
+    :param gates: quantum gates
+    :param which_where: [which gate, which spin, which spin]
+    :return: evolved state
+    Example: which_where = [[0, 1, 2], [1, 0, 1]] means gate 0 on spins
+    1 and 2, and gate 1 on spins 0 and 1
+    """
+    for n in range(len(which_where)):
+        states = pure_states_evolution_one_gate(
+            states, gates[which_where[n][0]], which_where[n][1:])
+    return states
+
+def measure(state):
+    shape = state.shape
+    state = state.reshape(-1)
+    probabilities = tc.abs(state) ** 2
+    # 根据概率分布进行测量
+    measured_index = tc.multinomial(probabilities, 1, replacement=True).item()  # 进行测量
+    measured_state = tc.zeros_like(state)
+    measured_state[measured_index] = 1  # 设置对应的量子态为1
+
+    return measured_state.reshape(shape)
+
+def measure_n_times(states, number:int):
+    '''
+    返回测量n次得到的平均密度矩阵
+    '''
+    shape = states.shape
+    states = states.reshape([shape[0], -1])
+    probabilities = tc.abs(states) ** 2
+    # 根据概率分布进行多次测量
+    measured_indices = tc.multinomial(probabilities, number, replacement=True)  # 进行多次测量
+    # 统计每个测量结果的出现次数
+    # counts = tc.bincount(measured_indices, minlength=states.shape[1])
+    counts = []
+    for row in measured_indices:
+        # 使用 bincount 统计每一行的元素出现次数
+        count = tc.bincount(row, minlength=states.shape[1])  # minlength 确保包含所有可能的值
+        counts.append(count)
+    counts = tc.stack(counts)  # 将结果堆叠成一个张量
+    pd = counts / tc.sum(counts, dim=1, keepdim=True)
+    avg_state = tc.sqrt(pd)
+    # avg_rho = tc.diag(pd)
+    return avg_state.reshape(shape).to(dtype=states.dtype)
+
+def sample_classical_shadow(aim_states, n_qubit, num_sample=10000)->tc.Tensor:
+    '''
+    state的形状为[number_of_states]+[2]*n_qubit;
+    
+    返回一个形状为[number_of_states]+[2**n_qubit, 2**n_qubit]的密度矩阵
+    '''
+    n = aim_states.shape[0]
+    cliff = random_clifford(n_qubit)
+    qc = cliff.to_circuit()
+    gate_names, gate_list, which_where = convert_qiskit_circuit_to_usual_gates(qc, dtype=aim_states.dtype, device=aim_states.device)
+    U_states = pure_states_evolution(aim_states, gate_list, which_where)
+    # b_state = measure(U_state)
+    b_states = measure_n_times(U_states, num_sample)
+
+    inverse_qc = qc.inverse()
+    gate_names, gate_list, which_where = convert_qiskit_circuit_to_usual_gates(inverse_qc, dtype=aim_states.dtype, device=aim_states.device)
+    sigma_states = pure_states_evolution(b_states, gate_list, which_where)
+    sigmas = tc.einsum('na, nb -> nab', sigma_states.reshape([n, -1]), sigma_states.reshape([n, -1]).conj())
+    Eye = tc.eye(2**n_qubit, dtype=aim_states.dtype, device=aim_states.device)
+    Eye_tensor = Eye.unsqueeze(0).expand(n, -1, -1)
+    rho_samples = (2**n_qubit + 1) * sigmas - Eye_tensor
+    return rho_samples

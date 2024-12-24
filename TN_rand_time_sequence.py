@@ -269,5 +269,5 @@ if __name__ == '__main__':
     data['train_lbs'] = train_lbs
     data['test_set'] = testset
     data['test_lbs'] = test_lbs
-    
+
     tc.save(data, path+'/train_set_sample_{:d}_evol_{:d}.pt'.format(args.sample_num, args.evol_num))
