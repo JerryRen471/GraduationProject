@@ -91,11 +91,12 @@ def loss_norm(psi1:tc.Tensor, psi0:tc.Tensor):
     loss = 1/N * tc.norm(psi0 - psi1)**2
     return loss
 
-def loss_sample_fide(psi_real:tc.Tensor, psi_pred:tc.Tensor, num_basis:int=300, k=10, num_sample:int=100000):
+def loss_sample_fide(psi_real:tc.Tensor, psi_pred:tc.Tensor, num_basis:int=30, k=10, num_sample:int=100000):
     assert psi_pred.shape == psi_real.shape
     assert psi_pred.device == psi_real.device
     assert psi_pred.dtype == psi_real.dtype
 
+    psi_pred.requires_grad_()
     num_states = psi_pred.shape[0]
     n_qubit = len(psi_real.shape) - 1
     avg_rho = 0
@@ -236,12 +237,14 @@ def train(qc, data:dict, para:dict):
         train_fide_tmp = 0.0
         train_batches = 0
         test_batches = 0
+        print(t)
         for n, (samples, lbs) in enumerate(trainloader):
             psi0 = samples
             for _ in range(para['recurrent_time']):
                 psi0 = qc(psi0)
             psi1 = psi0
             loss = loss_fun(psi1, lbs)
+            print(loss.requires_grad)
             loss.backward()
             optimizer.step()
             optimizer.zero_grad()
