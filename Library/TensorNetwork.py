@@ -1,11 +1,12 @@
 from copy import deepcopy
 from platform import node
 import time
-from turtle import left
+from turtle import left, right
 from debugpy import connect
 import torch as tc
 import numpy as np
 from Library.BasicFun import pad_and_cat
+from rand_uni import n_body_evol_states
 # from traitlets import default
 
 def copy_from_tn(tn):
@@ -354,7 +355,7 @@ class TensorNetwork_pack():
         self.history = tn.history
 
     def add_node(self, node:tc.Tensor, site=-1, device=tc.device('cpu'), dtype=tc.complex64):
-        self.node_list.append(node)
+        self.node_list.append(node.to(device=device, dtype=dtype))
         if site != -1:
             self.move_node(-1, site)
 
@@ -433,6 +434,89 @@ class TensorNetwork_pack():
             self.connect_graph[(node_idx+1, node_idx+2)] = [(2, 1)]
 
     def merge_graph(self, merges):
+        def renew_leg_pairs(renew_node, old_leg_pairs, leg_map):
+            new_leg_pairs = []
+            for old_leg_pair in old_leg_pairs:
+                new_leg_pair = list(old_leg_pair)
+                new_leg_pair[renew_node] = leg_map[old_leg_pair[renew_node]]
+                new_leg_pairs.append(tuple(new_leg_pair))
+            return new_leg_pairs
+
+        for i in range(len(merges)):
+            node_pair, n1_map, n2_map = merges.pop()
+            if node_pair in self.connect_graph.keys():
+                self.connect_graph.pop(node_pair)
+            keys = list(self.connect_graph.keys())[:]
+            dict_tmp = dict()
+            for key in keys:
+                new_leg_pairs = []
+                old_leg_pairs = self.connect_graph.pop(key)
+                if key[0] < node_pair[0]:
+                    if key[1] < node_pair[0]:
+                        new_node_pair = [key[0], key[1]]
+                        new_leg_pairs = deepcopy(old_leg_pairs)
+                    elif key[1] == node_pair[0]:
+                        new_node_pair = [key[0], key[1]]
+                        new_leg_pairs = renew_leg_pairs(renew_node=1, old_leg_pairs=old_leg_pairs, leg_map=n1_map)
+                        pass
+                    elif key[1] > node_pair[0] and key[1] < node_pair[1]:
+                        new_node_pair = [key[0], key[1]]
+                        new_leg_pairs = deepcopy(old_leg_pairs)
+                        pass
+                    elif key[1] == node_pair[1]:
+                        new_node_pair = [key[0], node_pair[0]]
+                        new_leg_pairs = renew_leg_pairs(renew_node=1, old_leg_pairs=old_leg_pairs, leg_map=n2_map)
+                        pass
+                    elif key[1] > node_pair[1]:
+                        new_node_pair = [key[0], key[1]-1]
+                        new_leg_pairs = deepcopy(old_leg_pairs)
+                        pass
+                    pass
+                elif key[0] == node_pair[0]:
+                    if key[1] < node_pair[1]:
+                        new_node_pair = [node_pair[0], key[1]]
+                        new_leg_pairs = renew_leg_pairs(renew_node=0, old_leg_pairs=old_leg_pairs, leg_map=n1_map)
+                        pass
+                    elif key[1] == node_pair[1]:
+                        pass
+                    elif key[1] > node_pair[1]:
+                        new_node_pair = [node_pair[0], key[1]-1]
+                        new_leg_pairs = renew_leg_pairs(renew_node=0, old_leg_pairs=old_leg_pairs, leg_map=n1_map)
+                        pass
+                    pass
+                elif key[0] > node_pair[0] and key[0] < node_pair[1]:
+                    if key[1] < node_pair[1]:
+                        new_node_pair = [key[0], key[1]]
+                        new_leg_pairs = deepcopy(old_leg_pairs)
+                        pass
+                    elif key[1] == node_pair[1]:
+                        new_node_pair = [node_pair[0], key[0]]
+                        tmp_leg_pairs = renew_leg_pairs(renew_node=1, old_leg_pairs=old_leg_pairs, leg_map=n2_map)
+                        new_leg_pairs = []
+                        for leg_pair in tmp_leg_pairs:
+                            new_leg_pairs.append(tuple(leg_pair[1], leg_pair[0]))
+                        pass
+                    elif key[1] > node_pair[1]:
+                        new_node_pair = [key[0], key[1]-1]
+                        new_leg_pairs = deepcopy(old_leg_pairs)
+                        pass
+                    pass
+                elif key[0] == node_pair[1]:
+                    if key[1] > node_pair[1]:
+                        new_node_pair = [node_pair[0], key[1]-1]
+                        new_leg_pairs = renew_leg_pairs(renew_node=0, old_leg_pairs=old_leg_pairs, leg_map=n2_map)
+                        pass
+                    pass
+                elif key[0] > node_pair[1]:
+                    new_node_pair = [key[0]-1, key[1]-1]
+                    new_leg_pairs = deepcopy(old_leg_pairs)
+                    pass
+                new_leg_pairs = dict_tmp.get(tuple(new_node_pair), []) + new_leg_pairs
+                dict_tmp[tuple(new_node_pair)] = new_leg_pairs
+            self.connect_graph.update(dict_tmp)
+
+    '''
+    def merge_graph(self, merges):
         for i in range(len(merges)):
             node_pair, n1_left_legs, n2_left_legs = merges.pop()
             if node_pair in self.connect_graph.keys():
@@ -440,7 +524,7 @@ class TensorNetwork_pack():
             keys = list(self.connect_graph.keys())[:]
             dict_tmp = dict()
             for key in keys:
-                new_leg_pairs = [] # ?
+                new_leg_pairs = []
                 old_leg_pairs = self.connect_graph.pop(key)
                 for old_leg_pair in old_leg_pairs:
                     new_node_pair = [None, None]
@@ -469,7 +553,8 @@ class TensorNetwork_pack():
                 new_leg_pairs = dict_tmp.get(tuple(new_node_pair), []) + new_leg_pairs
                 dict_tmp[tuple(new_node_pair)] = new_leg_pairs
             self.connect_graph.update(dict_tmp)
-
+    '''
+    
     def move_graph(self, moves):
         idx = list(i for i in range(len(self.node_list)))
         for i in range(len(moves)):
@@ -511,8 +596,9 @@ class TensorNetwork_pack():
         node_pair = tuple(sorted(node_pair))
         node1 = self.node_list[node_pair[0]]
         node2 = self.node_list[node_pair[1]]
-        n1_left_legs = [_ for _ in range(0, len(node1.shape))]
-        n2_left_legs = [_ for _ in range(0, len(node2.shape))]
+        start_leg = lambda x: 0 if x==True else 1
+        n1_left_legs = [_ for _ in range(start_leg(is_gate[0]), len(node1.shape))]
+        n2_left_legs = [_ for _ in range(start_leg(is_gate[1]), len(node2.shape))]
         
         # if is_gate[0] == True and is_gate[1] == True:
         #     n1_left_legs = [_ for _ in range(0, len(node1.shape))]
@@ -538,7 +624,12 @@ class TensorNetwork_pack():
             dim2 = dim2 * node2.shape[leg_piar[1]]
             n1_left_legs.remove(leg_piar[0])
             n2_left_legs.remove(leg_piar[1])
-        
+
+        def cat_legs(legs1, legs2):
+            legs = legs1[:]
+            for leg in legs2:
+                legs.append(leg+len(legs1))
+            return legs
         if is_gate[0] == True and is_gate[1] == True:
             perm_1 = n1_left_legs+n1_merge_legs
             perm_2 = n2_merge_legs+n2_left_legs
@@ -546,37 +637,46 @@ class TensorNetwork_pack():
             shape_2 = [dim2, -1]
             einsum_str = 'ij,jk->ik'
             new_shape = [node1.shape[i] for i in n1_left_legs]+[node2.shape[j] for j in n2_left_legs]
+            n1_new_legs = list(i for i in range(len(n1_left_legs)))
+            n2_new_legs = list(i + len(n1_left_legs) for i in range(len(n2_left_legs)))
         elif is_gate[0] == True and is_gate[1] == False:
             perm_1 = n1_left_legs+n1_merge_legs
-            perm_2 = [n2_left_legs[0]]+n2_merge_legs+n2_left_legs[1:]
+            perm_2 = [0]+n2_merge_legs+n2_left_legs
             shape_1 = [-1, dim1]
             shape_2 = [node2.shape[0], dim2, -1]
             einsum_str = 'ij,njk->nik'
-            new_shape = [node2.shape[0]]+[node1.shape[i] for i in n1_left_legs]+[node2.shape[j] for j in n2_left_legs[1:]]
-            n1_left_legs = [None] + n1_left_legs[:]
-            n2_left_legs = n2_left_legs[1:]
+            new_shape = [node2.shape[0]]+[node1.shape[i] for i in n1_left_legs]+[node2.shape[j] for j in n2_left_legs]
+            n1_new_legs = list(i+1 for i in range(len(n1_left_legs)))
+            n2_new_legs = list(i + len(n1_left_legs) for i in range(len(n2_left_legs)))
         elif is_gate[0] == False and is_gate[1] == True:
-            perm_1 = n1_left_legs+n1_merge_legs
+            for i in range(len(n2_left_legs)):
+                n2_left_legs[i] = n2_left_legs[i] + 1
+            perm_1 = [0]+n1_left_legs+n1_merge_legs
             perm_2 = n2_merge_legs+n2_left_legs
             shape_1 = [node1.shape[0], -1, dim1]
             shape_2 = [dim2, -1]
             einsum_str = 'nij,jk->nik'
-            new_shape = [node1.shape[i] for i in n1_left_legs]+[node2.shape[j] for j in n2_left_legs]
+            new_shape = [node1.shape[0]]+[node1.shape[i] for i in n1_left_legs]+[node2.shape[j] for j in n2_left_legs]
+            n1_new_legs = list(i for i in range(len(n1_left_legs)))
+            n2_new_legs = list(i + len(n1_left_legs) + 1 for i in range(len(n2_left_legs)))
         elif is_gate[0] == False and is_gate[1] == False:
-            perm_1 = n1_left_legs+n1_merge_legs
-            perm_2 = [n2_left_legs[0]]+n2_merge_legs+n2_left_legs[1:]
+            perm_1 = [0]+n1_left_legs+n1_merge_legs
+            perm_2 = [0]+n2_merge_legs+n2_left_legs
             shape_1 = [node1.shape[0], -1, dim1]
             shape_2 = [node2.shape[0], dim2, -1]
             einsum_str = 'nij,njk->nik'
-            new_shape = [node1.shape[i] for i in n1_left_legs]+[node2.shape[j] for j in n2_left_legs[1:]]
-            n2_left_legs = n2_left_legs[1:]
+            new_shape = [node1.shape[0]]+[node1.shape[i] for i in n1_left_legs]+[node2.shape[j] for j in n2_left_legs]
+            n1_new_legs = list(i for i in range(len(n1_left_legs)))
+            n2_new_legs = list(i + len(n1_left_legs) for i in range(len(n2_left_legs)))
 
         node1_ = node1.permute(perm_1).reshape(shape_1)
         node2_ = node2.permute(perm_2).reshape(shape_2)
         new_node_ = tc.einsum(einsum_str, node1_, node2_)
         new_node = new_node_.reshape(new_shape)
         # new_node = tc.tensordot(node1, node2, dims=(n1_merge_legs, n2_merge_legs))
-        return new_node, n1_left_legs, n2_left_legs
+        n1_map = dict(zip(n1_left_legs, n1_new_legs))
+        n2_map = dict(zip(n2_left_legs, n2_new_legs))
+        return new_node, n1_map, n2_map
 
     def merge_nodes(self, node_pair:tuple, is_gate:tuple=(False, False)):
         node_pair = list(node_pair)
@@ -837,28 +937,28 @@ class TensorTrain(TensorNetwork):
                 self.merge_nodes((i-1, i-2))
                 self.center = (i-1) % self.length
 
-    def act_n_body_gate(self, gate, pos:list):
-        """
-        gate: 作用的门，是形状为(2**n, 2**n)的矩阵（2也可以是phy_dim）
-        pos: 连续的位置
-        """
-        n = len(pos)
-        center = (n-1) // 2
-        perm = [_ for _ in range(0, center)] + [_ for _ in range(n, n+center)] + [center]\
-              + [_ for _ in range(center+1, n)] + [_ for _ in range(center+n+1, 2*n)] + [center+n]
-        reshaped_gate = gate.reshape([self.phydim] * (2*n)).permute(perm).reshape(\
-            [self.phydim**(2*center), self.phydim, self.phydim**(2*n-2*center-2), self.phydim])
-        self.add_node(reshaped_gate, device=self.device, dtype=self.dtype)
-        self.connect([-1, -1], [pos[center], 1])
-        for i in range(center, 0, -1):
-            Eye = tc.eye(self.phydim**(2*i), device=self.device, dtype=self.dtype).reshape([self.phydim]*(4*i))
-            perm = [_ for _ in range(1, 2*i-1)] + [0] + [_ for _ in range(2*i, 4*i)] + [2*i-1]
-            Eye = Eye.permute(perm).reshape([self.phydim**(2*i-2), self.phydim, self.phydim**(2*i), self.phydim])
-            self.add_node(Eye, device=self.device, dtype=self.dtype)
-            self.connect([-1, -1], [pos[i-1], 1])
-            self.connect([-1, 2], [-2, 0])
-            pass
-        pass
+    # def act_n_body_gate(self, gate, pos:list):
+    #     """
+    #     gate: 作用的门，是形状为(2**n, 2**n)的矩阵（2也可以是phy_dim）
+    #     pos: 连续的位置
+    #     """
+    #     n = len(pos)
+    #     center = (n-1) // 2
+    #     perm = [_ for _ in range(0, center)] + [_ for _ in range(n, n+center)] + [center]\
+    #           + [_ for _ in range(center+1, n)] + [_ for _ in range(center+n+1, 2*n)] + [center+n]
+    #     reshaped_gate = gate.reshape([self.phydim] * (2*n)).permute(perm).reshape(\
+    #         [self.phydim**(2*center), self.phydim, self.phydim**(2*n-2*center-2), self.phydim])
+    #     self.add_node(reshaped_gate, device=self.device, dtype=self.dtype)
+    #     self.connect([-1, -1], [pos[center], 1])
+    #     for i in range(center, 0, -1):
+    #         Eye = tc.eye(self.phydim**(2*i), device=self.device, dtype=self.dtype).reshape([self.phydim]*(4*i))
+    #         perm = [_ for _ in range(1, 2*i-1)] + [0] + [_ for _ in range(2*i, 4*i)] + [2*i-1]
+    #         Eye = Eye.permute(perm).reshape([self.phydim**(2*i-2), self.phydim, self.phydim**(2*i), self.phydim])
+    #         self.add_node(Eye, device=self.device, dtype=self.dtype)
+    #         self.connect([-1, -1], [pos[i-1], 1])
+    #         self.connect([-1, 2], [-2, 0])
+    #         pass
+    #     pass
 
     def act_one_body_gate(self, gate, pos:int):
         self.move_center_to(pos)
@@ -930,28 +1030,33 @@ class TensorTrain_pack(TensorNetwork_pack):
         self.trunc_error = tc.zeros(size=(tensor_packs[0].shape[0],), device=device, dtype=dtype)
 
         # center_reletive = self.center
-        tensor = tensor_packs[0]
-        flags = [tensor.dim()-2]
+        
         if initialize == True:
-            tensor = tc.unsqueeze(tensor, 1)
-            tensor = tc.unsqueeze(tensor, -1)
-            self.add_node(tensor, device=device, dtype=dtype)
+            # tensor = tensor_packs[0]
+            # flags = [tensor.dim()-2]
+            # tensor = tc.unsqueeze(tensor, 1)
+            # tensor = tc.unsqueeze(tensor, -1)
+            # self.add_node(tensor, device=device, dtype=dtype)
             #     center_reletive -= tensor.dim()-2
             # else:
             #     self.normalize_node(node_idx=-1, center=center_reletive)
-            for tensor in tensor_packs[1:]:
-                flags.append(flags[-1] + tensor.dim()-1)
+            flags = []
+            for i, tensor in enumerate(tensor_packs[:]):
                 tensor = tc.unsqueeze(tensor, 1)
                 tensor = tc.unsqueeze(tensor, -1)
                 self.add_node(tensor, device=device, dtype=dtype)
-                self.connect([-2, -1], [-1, 1])
+                if i == 0:
+                    flags.append(tensor.dim()-2)
+                else:
+                    flags.append(flags[-1] + tensor.dim()-1)
+                    self.connect([-2, -1], [-1, 1])
             flags.pop()
 
             self.initialize(flags, if_trun=True)
         else:
             self.node_list = []
             for node in tensor_packs:
-                self.node_list.append(node.clone())
+                self.add_node(node.clone(), device=device, dtype=dtype)
                 if len(self.node_list) > 1:
                     self.connect([-2, -1], [-1, 1])
         pass
@@ -1009,28 +1114,28 @@ class TensorTrain_pack(TensorNetwork_pack):
                 self.merge_nodes((i-1, i-2))
                 self.center = (i-1) % self.length
 
-    def act_n_body_gate(self, gate, pos:list):
-        """
-        gate: 作用的门，是形状为(2**n, 2**n)的矩阵（2也可以是phy_dim）
-        pos: 连续的位置
-        """
-        n = len(pos)
-        center = (n-1) // 2
-        perm = [_ for _ in range(0, center)] + [_ for _ in range(n, n+center)] + [center]\
-              + [_ for _ in range(center+1, n)] + [_ for _ in range(center+n+1, 2*n)] + [center+n]
-        reshaped_gate = gate.reshape([self.phydim] * (2*n)).permute(perm).reshape(\
-            [self.phydim**(2*center), self.phydim, self.phydim**(2*n-2*center-2), self.phydim])
-        self.add_node(reshaped_gate, device=self.device, dtype=self.dtype)
-        self.connect([-1, -1], [pos[center], 1])
-        for i in range(center, 0, -1):
-            Eye = tc.eye(self.phydim**(2*i), device=self.device, dtype=self.dtype).reshape([self.phydim]*(4*i))
-            perm = [_ for _ in range(1, 2*i-1)] + [0] + [_ for _ in range(2*i, 4*i)] + [2*i-1]
-            Eye = Eye.permute(perm).reshape([self.phydim**(2*i-2), self.phydim, self.phydim**(2*i), self.phydim])
-            self.add_node(Eye, device=self.device, dtype=self.dtype)
-            self.connect([-1, -1], [pos[i-1], 1])
-            self.connect([-1, 2], [-2, 0])
-            pass
-        pass
+    # def act_n_body_gate(self, gate, pos:list):
+    #     """
+    #     gate: 作用的门，是形状为(2**n, 2**n)的矩阵（2也可以是phy_dim）
+    #     pos: 连续的位置
+    #     """
+    #     n = len(pos)
+    #     center = (n-1) // 2
+    #     perm = [_ for _ in range(0, center)] + [_ for _ in range(n, n+center)] + [center]\
+    #           + [_ for _ in range(center+1, n)] + [_ for _ in range(center+n+1, 2*n)] + [center+n]
+    #     reshaped_gate = gate.reshape([self.phydim] * (2*n)).permute(perm).reshape(\
+    #         [self.phydim**(2*center), self.phydim, self.phydim**(2*n-2*center-2), self.phydim])
+    #     self.add_node(reshaped_gate, device=self.device, dtype=self.dtype)
+    #     self.connect([-1, -1], [pos[center], 1])
+    #     for i in range(center, 0, -1):
+    #         Eye = tc.eye(self.phydim**(2*i), device=self.device, dtype=self.dtype).reshape([self.phydim]*(4*i))
+    #         perm = [_ for _ in range(1, 2*i-1)] + [0] + [_ for _ in range(2*i, 4*i)] + [2*i-1]
+    #         Eye = Eye.permute(perm).reshape([self.phydim**(2*i-2), self.phydim, self.phydim**(2*i), self.phydim])
+    #         self.add_node(Eye, device=self.device, dtype=self.dtype)
+    #         self.connect([-1, -1], [pos[i-1], 1])
+    #         self.connect([-1, 2], [-2, 0])
+    #         pass
+    #     pass
 
     def act_one_body_gate(self, gate, pos:int):
         # not finished
@@ -1077,6 +1182,71 @@ class TensorTrain_pack(TensorNetwork_pack):
         # self.merge_nodes((i, i+1))
         self.center = i+1
         self.normalize()
+        return self
+
+    def act_n_body_gate(self, gate, pos:list, set_center:int):
+        def fill_seq(pos:list):
+            delta_pos = list(i for i in range(pos[0], pos[-1]+1))
+            for i in pos:
+                delta_pos.remove(i)
+            return delta_pos
+        def step_function(i:int, pos:list):
+            f = lambda x: 0 if x < 0 else 1
+            y = 0
+            for j in pos[1:]:
+                y = y + f(i - j)
+            return y
+        if self.center < pos[0]:
+            self.move_center_to(to_idx=pos[0])
+        elif self.center > pos[-1]:
+            self.move_center_to(to_idx=pos[-1])
+        gate_list = n_body_gate_to_mpo(gate, n=len(pos), phydim=self.phydim, device=self.device, dtype=self.dtype)
+        delta_dim_list = [gate_list[step_function(i, pos)].shape[-1] for i in range(pos[0], pos[-1]+1)]
+        delta_pos = fill_seq(pos)
+        self.add_node(gate_list[0].squeeze(), site=pos[0]+1, device=self.device, dtype=self.dtype)
+        self.connect([pos[0], 2], [pos[0]+1, 1])
+        self.merge_nodes((pos[0], pos[0]+1), is_gate=(False, True))
+        self.permute_legs(pos[0], perm=[1, 3, 4, 2])
+        gate_idx = 1
+        for i in range(pos[0]+1, pos[-1]):
+            if i in pos:
+                self.add_node(gate_list[gate_idx], site=i+1, device=self.device, dtype=self.dtype)
+                self.connect([i, 2], [i+1, 2])
+                self.connect([i-1, 3], [i+1, 0])
+                self.merge_nodes((i, i+1), is_gate=(False, True))
+                self.permute_legs(i, perm=[1, 3, 4, 5, 2])
+                gate_idx += 1
+                pass
+            elif i in delta_pos:
+                delta_dim = delta_dim_list[i]
+                delta = tc.einsum('il, jl -> ijkl', tc.eys(delta_dim, device=self.device, dtype=self.dtype), tc.eys(self.phydim, device=self.device, dtype=self.dtype))
+                self.add_node(delta, site=i+1, device=self.device, dtype=self.dtype)
+                self.connect([i, 2], [i+1, 1])
+                self.connect([i-1, 3], [i+1, 0])
+                self.merge_nodes((i, i+1), is_gate=(False, False))
+                self.permute_legs(i, perm=[1, 3, 4, 5, 2])
+                pass
+            pass
+        self.add_node(gate_list[-1].squeeze(), site=pos[-1]+1, device=self.device, dtype=self.dtype)
+        self.connect([pos[-1], 2], [pos[-1]+1, 2])
+        self.merge_nodes((pos[-1], pos[-1]+1), is_gate=(False, True))
+        self.permute_legs(pos[-1], perm=[1, 3, 4, 2])
+
+        for i in range(pos[0], set_center):
+            print(i)
+            self.flatten((i, i+1))
+            self.merge_nodes((i, i+1))
+            self.split_node(i, legs_group=[1, 2], group_side='L', if_trun=True)
+            self.merge_nodes((i+1, i+2))
+
+        for i in range(pos[-1], set_center, -1):
+            self.flatten((i-1, i))
+            self.merge_nodes((i-1, i))
+            self.split_node(i-1, legs_group=[2, 3], group_side='R', if_trun=True)
+            self.merge_nodes((i-1, i))
+
+        self.normalize()
+        self.center = set_center
         return self
 
     def get_norm(self):
@@ -1148,6 +1318,14 @@ def rand_prod_mps_pack(number, length, chi, phydim=2, device=tc.device('cpu'), d
     mps = TensorTrain_pack(states, length=length, phydim=phydim, center=-1, chi=chi, device=device, dtype=dtype)
     return mps
 
+def rand_mps_pack(number, length, chi, phydim=2, device=tc.device('cpu'), dtype=tc.complex64):
+    local_tensors = [tc.rand([number, 1, phydim, chi], dtype=dtype, device=device)]\
+          + [tc.rand([number, chi, phydim, chi], dtype=dtype, device=device) for _ in range(length-2)]\
+          + [tc.rand([number, chi, phydim, 1], dtype=dtype, device=device)]
+    mps = TensorTrain_pack(local_tensors, length=length, phydim=phydim, center=length//2, chi=chi, device=device, dtype=dtype, initialize=False)
+    mps.initialize(flags=[i for i in range(length)])
+    return mps
+
 def inner_mps_pack(mps1:TensorTrain_pack, mps2:TensorTrain_pack):
     length = len(mps1.node_list)
     mps1_nodes = mps1.node_list
@@ -1185,9 +1363,51 @@ def copy_from_mps_pack(mps:TensorTrain_pack):
     new_node_list = []
     for node in mps.node_list:
         new_node_list.append(node.detach().clone())
-    new_mps = TensorTrain_pack(new_node_list, length=mps.length, phydim=mps.phydim, center=mps.phydim, chi=mps.chi, device=mps.device, dtype=mps.dtype, initialized=True)
+    new_mps = TensorTrain_pack(new_node_list, length=mps.length, phydim=mps.phydim, center=mps.phydim, chi=mps.chi, device=mps.device, dtype=mps.dtype, initialize=False)
     new_mps.connect_graph = deepcopy(mps.connect_graph)
     return new_mps
+
+def tensor2mps_pack(states:tc.Tensor, chi:int):
+    length = states.dim() - 1
+    phydim = states.shape[-1]
+    states = states.unsqueeze(1)
+    states = states.unsqueeze(-1)
+    mps_pack = TensorTrain_pack(tensor_packs=[states], length=length, phydim=phydim, center=-1, chi=chi, device=states.device, dtype=states.dtype, initialize=False)
+
+def n_body_gate_to_mpo(gate, n:int, phydim=2, device=tc.device('cpu'), dtype=tc.complex64):
+    # n = gate.dim() // 2
+    center_gate = gate.unsqueeze(0)
+    center_gate = center_gate.unsqueeze(-1)
+    left_gate_list = []
+    right_gate_list = []
+    while n > 2:
+        shape = list(center_gate.shape)
+        left_dim = shape[0]
+        right_dim = shape[-1]
+        left_gate = tc.eye(phydim * left_dim * phydim, device=device, dtype=dtype)
+        left_gate = left_gate.reshape([phydim, left_dim, phydim, phydim**2 * left_dim])
+        left_gate = left_gate.permute(dims=[1, 0, 2, 3])
+        right_gate = tc.eye(phydim**2 * right_dim, device=device, dtype=dtype)
+        right_gate = right_gate.reshape([phydim**2 * left_dim, phydim, right_dim, phydim])
+        right_gate = right_gate.permute(dims=[0, 1, 3, 2])
+        center_gate = center_gate.permute([1, 0, n+1] + [i for i in range(2, n)] + [i for i in range(n+2, 2*n)] + [n, 2*n+1, 2*n])
+        center_gate = center_gate.reshape([phydim**2 * left_dim] + shape[2:n] + shape[n+2:2*n] + [phydim**2 * right_dim])
+        left_gate_list = left_gate_list + [left_gate]
+        right_gate_list = [right_gate] + right_gate_list
+        n = n - 2
+    if n == 2:
+        shape = list(center_gate.shape)
+        left_dim = shape[0]
+        right_dim = shape[-1]
+        left_gate = tc.eye(phydim * left_dim * phydim, device=device, dtype=dtype)
+        left_gate = left_gate.reshape([phydim, left_dim, phydim, phydim**2 * left_dim])
+        left_gate = left_gate.permute(dims=[1, 0, 2, 3])
+        left_gate_list = left_gate_list + [left_gate]
+        center_gate = center_gate.permute([1, 0, 3, 2, 4, 5])
+        center_gate = center_gate.reshape([phydim**2 * left_dim, phydim, phydim, right_dim])
+        print(center_gate.shape)
+    gate_list = left_gate_list + [center_gate] + right_gate_list
+    return gate_list
 
 if __name__ == '__main__':
     t1 = time.time()
