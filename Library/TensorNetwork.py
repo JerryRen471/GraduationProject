@@ -554,7 +554,7 @@ class TensorNetwork_pack():
                 dict_tmp[tuple(new_node_pair)] = new_leg_pairs
             self.connect_graph.update(dict_tmp)
     '''
-    
+
     def move_graph(self, moves):
         idx = list(i for i in range(len(self.node_list)))
         for i in range(len(moves)):
@@ -625,11 +625,6 @@ class TensorNetwork_pack():
             n1_left_legs.remove(leg_piar[0])
             n2_left_legs.remove(leg_piar[1])
 
-        def cat_legs(legs1, legs2):
-            legs = legs1[:]
-            for leg in legs2:
-                legs.append(leg+len(legs1))
-            return legs
         if is_gate[0] == True and is_gate[1] == True:
             perm_1 = n1_left_legs+n1_merge_legs
             perm_2 = n2_merge_legs+n2_left_legs
@@ -646,18 +641,16 @@ class TensorNetwork_pack():
             shape_2 = [node2.shape[0], dim2, -1]
             einsum_str = 'ij,njk->nik'
             new_shape = [node2.shape[0]]+[node1.shape[i] for i in n1_left_legs]+[node2.shape[j] for j in n2_left_legs]
-            n1_new_legs = list(i+1 for i in range(len(n1_left_legs)))
-            n2_new_legs = list(i + len(n1_left_legs) for i in range(len(n2_left_legs)))
+            n1_new_legs = list(i + 1 for i in range(len(n1_left_legs)))
+            n2_new_legs = list(i + 1 + len(n1_left_legs) for i in range(len(n2_left_legs)))
         elif is_gate[0] == False and is_gate[1] == True:
-            for i in range(len(n2_left_legs)):
-                n2_left_legs[i] = n2_left_legs[i] + 1
             perm_1 = [0]+n1_left_legs+n1_merge_legs
             perm_2 = n2_merge_legs+n2_left_legs
             shape_1 = [node1.shape[0], -1, dim1]
             shape_2 = [dim2, -1]
             einsum_str = 'nij,jk->nik'
             new_shape = [node1.shape[0]]+[node1.shape[i] for i in n1_left_legs]+[node2.shape[j] for j in n2_left_legs]
-            n1_new_legs = list(i for i in range(len(n1_left_legs)))
+            n1_new_legs = list(i + 1 for i in range(len(n1_left_legs)))
             n2_new_legs = list(i + len(n1_left_legs) + 1 for i in range(len(n2_left_legs)))
         elif is_gate[0] == False and is_gate[1] == False:
             perm_1 = [0]+n1_left_legs+n1_merge_legs
@@ -666,8 +659,8 @@ class TensorNetwork_pack():
             shape_2 = [node2.shape[0], dim2, -1]
             einsum_str = 'nij,njk->nik'
             new_shape = [node1.shape[0]]+[node1.shape[i] for i in n1_left_legs]+[node2.shape[j] for j in n2_left_legs]
-            n1_new_legs = list(i for i in range(len(n1_left_legs)))
-            n2_new_legs = list(i + len(n1_left_legs) for i in range(len(n2_left_legs)))
+            n1_new_legs = list(i + 1 for i in range(len(n1_left_legs)))
+            n2_new_legs = list(i + 1 + len(n1_left_legs) for i in range(len(n2_left_legs)))
 
         node1_ = node1.permute(perm_1).reshape(shape_1)
         node2_ = node2.permute(perm_2).reshape(shape_2)
@@ -684,9 +677,9 @@ class TensorNetwork_pack():
             if node_pair[i] < 0:
                 node_pair[i] = len(self.node_list) + node_pair[i]
         node_pair = tuple(sorted(node_pair))
-        new_node, n1_left_legs, n2_left_legs = self.get_merged_node(node_pair, is_gate=is_gate)
+        new_node, n1_map, n2_map = self.get_merged_node(node_pair, is_gate=is_gate)
         self.node_list = self.node_list[:node_pair[0]] + [new_node] + self.node_list[node_pair[0]+1:node_pair[1]] + self.node_list[node_pair[1]+1:]
-        self.history['merge_nodes'].append([node_pair, n1_left_legs, n2_left_legs])
+        self.history['merge_nodes'].append([node_pair, n1_map, n2_map])
         self.renew_graph()
 
     def permute_legs(self, node_idx:int, perm:list):
