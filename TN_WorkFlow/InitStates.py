@@ -3,6 +3,11 @@ import numpy as np
 import sys
 sys.path.append('/data/home/scv7454/run/GraduationProject')
 from Library.Tools import *
+import Library.TensorNetwork as TN
+
+def states_to_mps_pack(states:tc.Tensor, length:int, chi:int, device=tc.device('cuda:0'), dtype=tc.complex128, **kwargs)->TN.TensorTrain_pack:
+    mps_pack = TN.TensorTrain_pack(tensor_packs=[states], length=length, phydim=2, center=-1, chi=chi, device=device, dtype=dtype, initialize=True)
+    return mps_pack
 
 def rand_states(number:int, length:int, device=tc.device('cuda:0'), dtype=tc.complex128, **kwargs)->tc.Tensor:
     number = int(number)
@@ -209,20 +214,20 @@ def linear_comb_of_scar_states(number:int, length:int, device=tc.device('cuda:0'
 
 def main(init_para:dict):
     if init_para['type'] == 'non_product':
-        return rand_states(**init_para)
+        return states_to_mps_pack(rand_states(**init_para), **init_para)
     elif init_para['type'] == 'product':
-        return rand_dir_prod_states(**init_para)
+        return states_to_mps_pack(rand_dir_prod_states(**init_para), **init_para)
     elif init_para['type'] == 'Z2':
-        return Z2_states(**init_para)
+        return states_to_mps_pack(Z2_states(**init_para), **init_para)
     elif init_para['type'] == 'entangled':
-        return rand_entangled_states(**init_para)
+        return states_to_mps_pack(rand_entangled_states(**init_para), **init_para)
     elif init_para['type'] == 'xorX':
-        return first_n_xorX_states(**init_para)
+        return states_to_mps_pack(first_n_xorX_states(**init_para), **init_para)
     elif init_para['type'] == 'eig':
-        return eig_states(**init_para)
+        return states_to_mps_pack(eig_states(**init_para), **init_para)
     elif init_para['type'] == 'RK':
-        return RK_states(**init_para)
+        return states_to_mps_pack(RK_states(**init_para), **init_para)
     elif init_para['type'] == 'linear_scar':
-        return linear_comb_of_scar_states(**init_para)
+        return states_to_mps_pack(linear_comb_of_scar_states(**init_para), **init_para)
     else:
         raise NotImplementedError

@@ -9,8 +9,6 @@ if __name__ == "__main__":
     # 创建物理模型参数组
     model_group = parser.add_argument_group('Physical Model Parameters')
     model_group.add_argument('--J', type=float, default=1)
-    model_group.add_argument('--delta', type=float, default=1)
-    model_group.add_argument('--lamda', type=float, default=0)
 
     # 创建训练参数组
     train_group = parser.add_argument_group('Training Parameters')
@@ -28,8 +26,8 @@ if __name__ == "__main__":
     # 将参数分组
     model_params = {
         'J': args.J,
-        'delta': args.delta,
-        'lamda': args.lamda,
+        'delta': args.J,
+        'theta': 0
     }
 
     train_params = {
@@ -42,8 +40,7 @@ if __name__ == "__main__":
         'tau': args.tau
     }
 
-    csv_file_path = '/data/home/scv7454/run/GraduationProject/Data/xorX_(J={})(delta={})(lamda={}).csv'.format(model_params['J'], model_params['delta'], model_params['lamda'])
-    print(csv_file_path)
+    csv_file_path = '/data/home/scv7454/run/GraduationProject/Data/Heis_(J={}).csv'.format(model_params['J'])
 
     m = 0
     tot_gate_fidelity = 0
@@ -52,7 +49,7 @@ if __name__ == "__main__":
     tot_H_diff = 0
     for i in range(2):
         m += 1
-        init_train_para, init_test_para, return_model_para, evol_para, nn_para, save_para = pack_params(model_name='xorX', model_para=model_params, device=tc.device('cuda:0'), csv_file_path=csv_file_path, **train_params)
+        init_train_para, init_test_para, return_model_para, evol_para, nn_para, save_para = pack_params(model_name='XXZ_inhomo', model_para=model_params, device=tc.device('cuda:0'), csv_file_path=csv_file_path, **train_params)
         gate_fidelity, spectrum_diff, similarity, H_diff = run_with_param(init_train_para, init_test_para, return_model_para, evol_para, nn_para, save_para)
         print(gate_fidelity, spectrum_diff, similarity, H_diff)
         tot_gate_fidelity += gate_fidelity

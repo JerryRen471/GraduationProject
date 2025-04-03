@@ -1,5 +1,5 @@
+from copy import deepcopy
 import random
-from shutil import which
 import torch as tc
 import numpy as np
 
@@ -7,8 +7,23 @@ import sys
 sys.path.append('/data/home/scv7454/run/GraduationProject')
 
 from Library import BasicFun as bf
-from Library.Tools import *
 from Library import PhysModule as phy
+from Library.TensorNetwork import TensorTrain_pack as tt_pack
+from Library.TEBD import *
+
+def pure_states_evolution(states:tt_pack, gates:list, which_where:list):
+    """Evolve the state by several gates0.
+
+    :param state: initial state
+    :param gates: quantum gates
+    :param which_where: [which gate, which spin, which spin]
+    :return: evolved state
+    Example: which_where = [[0, 1, 2], [1, 0, 1]] means gate 0 on spins
+    1 and 2, and gate 1 on spins 0 and 1
+    """    
+    for n in range(len(which_where)):
+        states.act_two_body_gate(gates[which_where[n][0]], which_where[n][1:])
+    return states
 
 def PXP_mul_states_evl(states, para=None):
     para_def = dict()
@@ -28,19 +43,9 @@ def PXP_mul_states_evl(states, para=None):
     sigma_x = tc.zeros([2, 2], device=para['device'], dtype=para['dtype'])
     sigma_x[0, 1] = sigma_x[1, 0] = 1+0.j
     hamilt = tc.kron(P, tc.kron(sigma_x, P))
-    gate = tc.matrix_exp(- 1j * para['tau'] * hamilt).reshape([2] * 6).to(dtype=para['dtype'])
-    gate_list = [gate]
-    which_where = []
-    for i in range(1, para['length'] - 1):
-        # gate_list.append(gate)
-        which_where.append([0, i-1, i, i+1])
-    list_states = list()
-    for t in range(para['time_it']):
-        states = pure_states_evolution(states, gate_list, which_where)
-        if t % para['print_time'] == para['print_time']-1:
-            list_states.append(states)
-    states = tc.stack(list_states, dim=1)
-    return states
+    hamilt_dict = gen_1d_hamilt_dict(length=para['length'], hamilt_list=[hamilt], single_pos_list=[0,1,2])
+    evol_states = TEBD(hamilt_dict, tau=para['tau'], t_steps=para['print_time'], device=para['device'], dtype=para['dtype'])
+    return evol_states
 
 def XXZ_inhomo_mul_states_evl(states, para=None):
     para_def = dict()
@@ -82,12 +87,12 @@ def XXZ_inhomo_mul_states_evl(states, para=None):
         which_where[0][0] = 1
         which_where[-1][0] = 2
     list_states = list()
+    states = deepcopy(states)
     for t in range(para['time_it']):
         states = pure_states_evolution(states, gate_list, which_where)
         if t % para['print_time'] == para['print_time']-1:
-            list_states.append(states)
-    states = tc.stack(list_states, dim=1)
-    return states
+            list_states.append(deepcopy(states))
+    return list_states
 
 def xorX_mul_states_evl(states, para=None):
     para_def = dict()
@@ -131,12 +136,12 @@ def xorX_mul_states_evl(states, para=None):
     for i in range(0, para['length'] - 1):
         which_where.append([2, i, i+1])
     list_states = list()
+    states = deepcopy(states)
     for t in range(para['time_it']):
         states = pure_states_evolution(states, gate_list, which_where)
         if t % para['print_time'] == para['print_time']-1:
-            list_states.append(states)
-    states = tc.stack(list_states, dim=1)
-    return states
+            list_states.append(deepcopy(states))
+    return list_states
 
 def Quantum_Sun_evol(states, para=None):
     para_def = {
@@ -171,6 +176,7 @@ def Quantum_Sun_evol(states, para=None):
     h = [0.5 + tc.rand(1, device=para['device']) for _ in range(para['out_size'])]
 
     list_states = list()
+    states = deepcopy(states)
     for t in range(para['time_it']):
         # states = pure_states_evolution(states, [gate, gate_l, gate_r], which_where)
         gate_dot = tc.matrix_exp(- 1j * para['tau'] * H_dot).reshape([para['d']] * 6)
@@ -181,15 +187,14 @@ def Quantum_Sun_evol(states, para=None):
             dot_pos = random.randint(0, para['dot_size']-1)
 
             gate_interact = tc.matrix_exp(- 1j * para['tau'] * para['alpha']**u[j] * SxSx).reshape([para['d']] * 4)
-            pure_states_evolution(states, [gate_interact], [[0, dot_pos, site_pos]])
+            states = pure_states_evolution(states, [gate_interact], [[0, dot_pos, site_pos]])
 
             gate_mag = tc.matrix_exp(- 1j * para['tau'] * h[j] * Sz).reshape([para['d']] * 2)
-            pure_states_evolution(states, [gate_mag], [[0, site_pos]])
+            states = pure_states_evolution(states, [gate_mag], [[0, site_pos]])
 
         if t % para['print_time'] == para['print_time']-1:
-            list_states.append(states)
-    states = tc.stack(list_states, dim=1)
-    return states
+            list_states.append(deepcopy(states))
+    return list_states
 
 def random_circuit(states, para=None):
     para_def = dict()
@@ -238,9 +243,9 @@ def random_circuit(states, para=None):
         for k in range((para['length'] - i % 2) // 2):
             which_where.append([3, k*2 + i%2, k*2 + i%2 + 1])
     list_states = list()
+    states = deepcopy(states)
     states = pure_states_evolution(states, gate_list, which_where)
     list_states.append(states)
-    states = tc.stack(list_states, dim=1)
     return states
 
 def main(model_name:str, model_para:dict, init_states:tc.Tensor, evol_para:dict, return_mat:bool=False):

@@ -682,12 +682,22 @@ class TensorNetwork_pack():
         self.history['merge_nodes'].append([node_pair, n1_map, n2_map])
         self.renew_graph()
 
-    def permute_legs(self, node_idx:int, perm:list):
+    def permute_legs(self, node_idx:int, cycle:list):
         '''
         perm: 局域张量指标交换后的顺序，注意从1开始
         '''
+        def convert_cycle_to_full_sequence(cycle, length):
+            # 初始化完整序列为原始顺序
+            full_sequence = list(range(length))
+            
+            # 应用轮换表示
+            for i in range(len(cycle) - 1):
+                full_sequence[cycle[i]], full_sequence[cycle[i + 1]] = full_sequence[cycle[i + 1]], full_sequence[cycle[i]]
+            
+            return full_sequence
+        perm = convert_cycle_to_full_sequence(cycle, self.node_list[node_idx].dim())
         node = self.node_list[node_idx]
-        self.node_list[node_idx] = tc.permute(node, [0]+perm)
+        self.node_list[node_idx] = tc.permute(node, perm)
         keys = list(self.connect_graph.keys())[:]
         for key in keys:
             for i in range(len(key)):
@@ -695,7 +705,7 @@ class TensorNetwork_pack():
                     connect_legs = self.connect_graph[key]
                     for j, legs in enumerate(connect_legs):
                         tmp = list(legs)
-                        tmp[i] = perm[legs[i] - 1]
+                        tmp[i] = perm.index(legs[i])
                         connect_legs[j] = tuple(tmp)
                     self.connect_graph[key] = connect_legs
         pass
@@ -981,7 +991,7 @@ class TensorTrain(TensorNetwork):
         self.merge_nodes((pos[0], pos[0]+1))
         self.move_node(-1, pos[1])
         self.merge_nodes((pos[1], pos[1]+1))
-        self.flatten(tuple(pos))
+        # self.flatten(tuple(pos))
         i = pos[0]
         self.split_node(i, legs_group=[-1], group_side='R', if_trun=False)
         self.merge_nodes((i+1, i+2))
@@ -1048,7 +1058,7 @@ class TensorTrain_pack(TensorNetwork_pack):
             self.initialize(flags, if_trun=True)
         else:
             self.node_list = []
-            for node in tensor_packs:
+            for node in tensor_packs[:]:
                 self.add_node(node.clone(), device=device, dtype=dtype)
                 if len(self.node_list) > 1:
                     self.connect([-2, -1], [-1, 1])
@@ -1059,14 +1069,14 @@ class TensorTrain_pack(TensorNetwork_pack):
             legs_L = [1, 2]
             if i in flags:
                 self.merge_nodes((i, i+1))
-            self.split_node(i, legs_L, group_side='L', if_trun=False)
+            self.split_node(i, legs_L, group_side='L', if_trun=True)
             self.merge_nodes((i+1, i+2))
         
         for j in range(-1, -self.length + self.center, -1):
             legs_R = [-2, -1]
             if (j % self.length - 1) in flags:
                 self.merge_nodes((j-1, j))
-            self.split_node(j, legs_R, group_side='R', if_trun=False)
+            self.split_node(j, legs_R, group_side='R', if_trun=True)
             self.merge_nodes((j-2, j-1))
         self.split_node(self.center, legs_group=[1,2], group_side='L', if_trun=if_trun)
         self.merge_nodes((self.center, self.center+1))
@@ -1090,22 +1100,43 @@ class TensorTrain_pack(TensorNetwork_pack):
     #         self.merge_nodes((j-2, j-1))
     #     self.normalize()
 
+    def orthogonalize_part(self, start:int, end:int, if_trun=True):
+        if start < end:
+            for i in range(start, end):
+                self.merge_nodes((i, i+1))
+                self.split_node(i, legs_group=[1, 2], group_side='L', if_trun=if_trun)
+                self.merge_nodes((i+1, i+2))
+        elif start > end:
+            for i in range(start, end, -1):
+                self.merge_nodes((i-1, i))
+                self.split_node(i-1, legs_group=[3, 4], group_side='R', if_trun=if_trun)
+                self.merge_nodes((i-1, i))
+
     def move_center_to(self, to_idx, if_trun=True):
         to_idx = to_idx % self.length
-        if self.center < to_idx:
-            move_path = list(i for i in range(self.center, to_idx))
-            for i in move_path:
-                self.split_node(i, legs_group=[-1], group_side='R', if_trun=if_trun)
-                self.merge_nodes((i+1, i+2))
-                self.merge_nodes((i+1, i+2))
-                self.center = i+1
-        else:
-            move_path = list(i for i in range(self.center - self.length, to_idx - self.length, -1))
-            for i in move_path:
-                self.split_node(i, legs_group=[1], group_side='L', if_trun=if_trun)
-                self.merge_nodes((i-1, i-2))
-                self.merge_nodes((i-1, i-2))
-                self.center = (i-1) % self.length
+        if type(self.center) == int:
+            self.orthogonalize_part(start=self.center, end=to_idx, if_trun=if_trun)
+            self.center = to_idx
+        elif type(self.center) == list:
+            affected_part = self.center[:] + [to_idx]
+            affected_part.sort()
+            self.orthogonalize_part(start=affected_part[0], end=to_idx, if_trun=if_trun)
+            self.orthogonalize_part(start=affected_part[-1], end=to_idx, if_trun=if_trun)
+            self.center = to_idx
+        # if self.center < to_idx:
+        #     move_path = list(i for i in range(self.center, to_idx))
+        #     for i in move_path:
+        #         self.split_node(i, legs_group=[-1], group_side='R', if_trun=if_trun)
+        #         self.merge_nodes((i+1, i+2))
+        #         self.merge_nodes((i+1, i+2))
+        #         self.center = i+1
+        # else:
+        #     move_path = list(i for i in range(self.center - self.length, to_idx - self.length, -1))
+        #     for i in move_path:
+        #         self.split_node(i, legs_group=[1], group_side='L', if_trun=if_trun)
+        #         self.merge_nodes((i-1, i-2))
+        #         self.merge_nodes((i-1, i-2))
+        #         self.center = (i-1) % self.length
 
     # def act_n_body_gate(self, gate, pos:list):
     #     """
@@ -1137,7 +1168,7 @@ class TensorTrain_pack(TensorNetwork_pack):
         self.connect([pos, 2], [-1, 1])
         self.move_node(-1, pos)
         self.merge_nodes((pos, pos+1), is_gate=(True, False))
-        self.permute_legs(pos, perm=[2, 1, 3])
+        self.permute_legs(pos, cycle=[1, 2])
         self.normalize()
         pass
 
@@ -1162,7 +1193,7 @@ class TensorTrain_pack(TensorNetwork_pack):
         self.merge_nodes((pos[0], pos[0]+1), is_gate=(False, True))
         self.move_node(-1, pos[1])
         self.merge_nodes((pos[1], pos[1]+1), is_gate=(True, False))
-        self.flatten(tuple(pos))
+        # self.flatten(tuple(pos))
         i = pos[0]
         self.merge_nodes((i, i+1))
         self.split_node(i, legs_group=[1, 2], group_side='L', if_trun=True)
@@ -1177,7 +1208,7 @@ class TensorTrain_pack(TensorNetwork_pack):
         self.normalize()
         return self
 
-    def act_n_body_gate(self, gate, pos:list, set_center:int):
+    def act_n_body_gate(self, gate, pos:list):
         def fill_seq(pos:list):
             delta_pos = list(i for i in range(pos[0], pos[-1]+1))
             for i in pos:
@@ -1189,25 +1220,45 @@ class TensorTrain_pack(TensorNetwork_pack):
             for j in pos[1:]:
                 y = y + f(i - j)
             return y
-        if self.center < pos[0]:
-            self.move_center_to(to_idx=pos[0])
-        elif self.center > pos[-1]:
-            self.move_center_to(to_idx=pos[-1])
+
+        if type(self.center) == int:
+            affected_pos = pos[:] + [self.center]
+            affected_pos.sort()
+            self.center = [affected_pos[0], affected_pos[-1]]
+        elif type(self.center) == list:
+            affected_pos = pos[:] + self.center[:]
+            affected_pos.sort()
+            self.center = [affected_pos[0], affected_pos[-1]]
+        else:
+            print('error: TensorTrain_pack.center should be int or list')
+        # affected_pos = pos[:] + next_pos[:]
+        # affected_pos.sort()
+        # if self.center < affected_pos[0]:
+        #     self.move_center_to(to_idx=affected_pos[0])
+        # elif self.center > affected_pos[-1]:
+        #     self.move_center_to(to_idx=affected_pos[-1])
+
         gate_list = n_body_gate_to_mpo(gate, n=len(pos), phydim=self.phydim, device=self.device, dtype=self.dtype)
+        # print(len(gate_list))
         delta_dim_list = [gate_list[step_function(i, pos)].shape[-1] for i in range(pos[0], pos[-1]+1)]
         delta_pos = fill_seq(pos)
+        # print('pos=', pos)
         self.add_node(gate_list[0].squeeze(), site=pos[0]+1, device=self.device, dtype=self.dtype)
         self.connect([pos[0], 2], [pos[0]+1, 1])
         self.merge_nodes((pos[0], pos[0]+1), is_gate=(False, True))
-        self.permute_legs(pos[0], perm=[1, 3, 4, 2])
+        ############## NOT SUITBLE FOR MULTI-BONDS BETWEEN TWO NODES ############
+        self.permute_legs(pos[0], cycle=[2, 3, 4])
         gate_idx = 1
         for i in range(pos[0]+1, pos[-1]):
+            # print(i)
             if i in pos:
                 self.add_node(gate_list[gate_idx], site=i+1, device=self.device, dtype=self.dtype)
                 self.connect([i, 2], [i+1, 2])
-                self.connect([i-1, 3], [i+1, 0])
+                self.connect([i-1, -2], [i+1, 0])
                 self.merge_nodes((i, i+1), is_gate=(False, True))
-                self.permute_legs(i, perm=[1, 3, 4, 5, 2])
+                self.flatten((i-1, i))
+                # self.permute_legs(i, cycle=[2, 3, 4, 5])
+                self.permute_legs(i, cycle=[2, 3, 4])
                 gate_idx += 1
                 pass
             elif i in delta_pos:
@@ -1215,31 +1266,74 @@ class TensorTrain_pack(TensorNetwork_pack):
                 delta = tc.einsum('il, jl -> ijkl', tc.eys(delta_dim, device=self.device, dtype=self.dtype), tc.eys(self.phydim, device=self.device, dtype=self.dtype))
                 self.add_node(delta, site=i+1, device=self.device, dtype=self.dtype)
                 self.connect([i, 2], [i+1, 1])
-                self.connect([i-1, 3], [i+1, 0])
+                self.connect([i-1, -2], [i+1, 0])
                 self.merge_nodes((i, i+1), is_gate=(False, False))
-                self.permute_legs(i, perm=[1, 3, 4, 5, 2])
-                pass
-            pass
+                self.flatten((i-1, i))
+                self.permute_legs(i, cycle=[2, 3, 4])
+                # self.permute_legs(i, cycle=[2, 3, 4, 5])
         self.add_node(gate_list[-1].squeeze(), site=pos[-1]+1, device=self.device, dtype=self.dtype)
-        self.connect([pos[-1], 2], [pos[-1]+1, 2])
+        self.connect([pos[-1], -2], [pos[-1]+1, 2])
+        self.connect([pos[-1]-1, -2], [pos[-1]+1, 0])
         self.merge_nodes((pos[-1], pos[-1]+1), is_gate=(False, True))
-        self.permute_legs(pos[-1], perm=[1, 3, 4, 2])
+        self.flatten((pos[-1]-1, pos[-1]))
+        self.permute_legs(pos[-1], cycle=[2, 3])
 
-        for i in range(pos[0], set_center):
-            print(i)
-            self.flatten((i, i+1))
-            self.merge_nodes((i, i+1))
-            self.split_node(i, legs_group=[1, 2], group_side='L', if_trun=True)
-            self.merge_nodes((i+1, i+2))
+        # for i in range(affected_pos[0], next_pos[0]):
+        #     self.merge_nodes((i, i+1))
+        #     self.split_node(i, legs_group=[1, 2], group_side='L', if_trun=True)
+        #     self.merge_nodes((i+1, i+2))
+        # for i in range(affected_pos[-1], next_pos[-1], -1):
+        #     self.merge_nodes((i-1, i))
+        #     self.split_node(i-1, legs_group=[2, 3], group_side='R', if_trun=True)
+        #     self.merge_nodes((i-1, i))
 
-        for i in range(pos[-1], set_center, -1):
-            self.flatten((i-1, i))
-            self.merge_nodes((i-1, i))
-            self.split_node(i-1, legs_group=[2, 3], group_side='R', if_trun=True)
-            self.merge_nodes((i-1, i))
+        # if set_center < pos[0]:
+        #     for i in range(pos[-1], set_center, -1):
+        #         self.merge_nodes((i-1, i))
+        #         self.split_node(i-1, legs_group=[2, 3], group_side='R', if_trun=True)
+        #         self.merge_nodes((i-1, i))
+        # elif set_center > pos[-1]:
+        #     for i in range(pos[0], set_center):
+        #         self.merge_nodes((i, i+1))
+        #         self.split_node(i, legs_group=[1, 2], group_side='L', if_trun=True)
+        #         self.merge_nodes((i+1, i+2))
+        # else:
+        #     for i in range(pos[0], set_center):
+        #         self.merge_nodes((i, i+1))
+        #         self.split_node(i, legs_group=[1, 2], group_side='L', if_trun=True)
+        #         self.merge_nodes((i+1, i+2))
 
-        self.normalize()
-        self.center = set_center
+        #     for i in range(pos[-1], set_center, -1):
+        #         self.merge_nodes((i-1, i))
+        #         self.split_node(i-1, legs_group=[2, 3], group_side='R', if_trun=True)
+        #         self.merge_nodes((i-1, i))
+
+        # self.center = set_center
+        return self
+
+    def act_n_body_gate_sequence(self, gate, pos_list, set_center, if_trun=True):
+        # def gen_center_sequence(pos_list):
+        #     center_list = []
+        if self.center < pos_list[0][0]:
+            self.move_center_to(pos_list[0][0], if_trun=if_trun)
+        elif self.center > pos_list[0][-1]:
+            self.move_center_to(pos_list[0][-1], if_trun=if_trun)
+        self.act_n_body_gate(gate, pos_list[0])
+        self.center = pos_list[0][:]
+
+        for i, pos in enumerate(pos_list[1:]):
+            # print('-'*10)
+            # print('the ', i, '-th gate:')
+            # print('pos:', pos)
+            # print('center:', self.center)
+            affected_pos = self.center[:] + pos[:]
+            affected_pos.sort()
+            # print('affected_pos:', affected_pos)
+            self.orthogonalize_part(start=affected_pos[0], end=pos[0], if_trun=if_trun)
+            self.orthogonalize_part(start=affected_pos[-1], end=pos[-1], if_trun=if_trun)
+            self.act_n_body_gate(gate, pos)
+            self.center = pos[:]
+        self.move_center_to(set_center, if_trun=if_trun)
         return self
 
     def get_norm(self):
@@ -1336,7 +1430,7 @@ def inner_mps_pack(mps1:TensorTrain_pack, mps2:TensorTrain_pack):
         result.connect([-2, 1], [-3, 1])
         result.connect([-1, 1], [-3, 2])
         result.merge_nodes((-1, -2))
-        result.flatten((0, 1))
+        # result.flatten((0, 1))
         result.merge_nodes((0, 1))
     return tc.squeeze(result.node_list[0])
 
@@ -1398,7 +1492,7 @@ def n_body_gate_to_mpo(gate, n:int, phydim=2, device=tc.device('cpu'), dtype=tc.
         left_gate_list = left_gate_list + [left_gate]
         center_gate = center_gate.permute([1, 0, 3, 2, 4, 5])
         center_gate = center_gate.reshape([phydim**2 * left_dim, phydim, phydim, right_dim])
-        print(center_gate.shape)
+        # print(center_gate.shape)
     gate_list = left_gate_list + [center_gate] + right_gate_list
     return gate_list
 

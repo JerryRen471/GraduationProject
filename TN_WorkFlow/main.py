@@ -1,6 +1,6 @@
 import sys
 sys.path.append('/data/home/scv7454/run/GraduationProject')
-from WorkFlow import InitStates, TimeEvol, TrainModel, DataProcess
+from TN_WorkFlow import InitStates, TimeEvol, TrainModel, DataProcess
 import argparse
 import ast
 import os
@@ -110,6 +110,7 @@ def run_with_param(init_train_para, init_test_para, model_para, evol_para, nn_pa
     return return_tuple
 
 def pack_params(
+        chi:int, 
         model_name:str, 
         model_para:dict, 
         length:int, 
@@ -128,6 +129,7 @@ def pack_params(
         **kwargs
         ):
     init_train_para = {
+        'chi': chi,
         'type': data_type,
         'length': length, 
         'number': sample_num, 
@@ -136,6 +138,7 @@ def pack_params(
     }
     init_train_para = dict(init_train_para, **kwargs, **model_para)
     init_test_para = {
+        'chi': chi,
         'type': 'product',
         'length': length,
         'number': 100, 
@@ -145,6 +148,7 @@ def pack_params(
 
     return_model_para = {
         'model_name': model_name,
+        'chi': chi,
         'length': length,
         'device': device,
         'dtype': dtype
@@ -152,6 +156,7 @@ def pack_params(
     return_model_para = dict(return_model_para, **model_para)
 
     evol_para = {
+        'chi': chi,
         'evol_num': evol_num,
         'time_interval': time_interval,
         'tau': tau,
@@ -171,6 +176,7 @@ def pack_params(
     }
 
     save_para = {
+        'chi': chi,
         'model_name': model_name,
         'length': length,
         'csv_file_path': csv_file_path,

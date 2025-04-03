@@ -10,7 +10,7 @@ if __name__ == "__main__":
     model_group = parser.add_argument_group('Physical Model Parameters')
     model_group.add_argument('--J', type=float, default=1)
     model_group.add_argument('--delta', type=float, default=1)
-    model_group.add_argument('--lamda', type=float, default=0)
+    model_group.add_argument('--lambda_', type=float, default=0)
 
     # 创建训练参数组
     train_group = parser.add_argument_group('Training Parameters')
@@ -29,10 +29,11 @@ if __name__ == "__main__":
     model_params = {
         'J': args.J,
         'delta': args.delta,
-        'lamda': args.lamda,
+        'lambda': args.lambda_,
     }
 
     train_params = {
+        'ksi_bar': 1.0,
         'sample_num': args.sample_num,
         'length': args.length,
         'data_type': args.data_type,
@@ -42,8 +43,7 @@ if __name__ == "__main__":
         'tau': args.tau
     }
 
-    csv_file_path = '/data/home/scv7454/run/GraduationProject/Data/xorX_(J={})(delta={})(lamda={}).csv'.format(model_params['J'], model_params['delta'], model_params['lamda'])
-    print(csv_file_path)
+    csv_file_path = '/data/home/scv7454/run/GraduationProject/Data/xorX_(J={})(delta={})(lamda={}).csv'.format(model_params['J'], model_params['delta'], model_params['lambda'])
 
     m = 0
     tot_gate_fidelity = 0

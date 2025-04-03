@@ -5,7 +5,7 @@ import os
 import seaborn as sns
 
 # 读取CSV文件
-data = pd.read_csv('/data/home/scv7454/run/GraduationProject/Data/Heis_sorted.csv')
+data = pd.read_csv('/data/home/scv7454/run/GraduationProject/Data/xorX_(J=1.0)(delta=0.1)(lambda=1.0).csv')
 # data = data[(data['evol_num'] >= 5)]
 # data['time_tot'] = data['time_interval'] * data['evol_num']
 # data = data[(data['time_tot'] <= 2) & (data['time_tot'] >= 0.1)]
@@ -17,16 +17,17 @@ loss = 'multi_mags'
 para_dict = {
     # 'sample_num': 10,
     'evol_num': 1,
-    'entangle_dim': 1,
-    # 'time_interval': 0.2,
-    'train_set_type': 'Z2',
-    'loss': loss
+    # 'entangle_dim': 1,
+    'time_interval': 0.2,
+    # 'train_set_type': 'Z2',
+    'loss_type': loss
 }
 
 x_axis = 'sample_num'
 y_axis_list = ['gate_fidelity', 'spectrum_diff', 'H_diff']
 varing_para = 'time_interval'
-varing_para_set = [0.02*i for i in range(1, 11)]
+varing_para_set = [0.02, 0.2]
+# varing_para_set = ['xorX', 'eig']
 choose_n = 4
 def choose_n_points(list_to_choose, n):
     l = len(list_to_choose)
@@ -35,10 +36,10 @@ def choose_n_points(list_to_choose, n):
     for i in range(n):
         choose.append(list_to_choose[i*(m+1)])
     return choose
-varing_para_set = choose_n_points(varing_para_set, choose_n)
+# varing_para_set = choose_n_points(varing_para_set, choose_n)
 
 evol_num_list = [i for i in range(1, 2)]
-train_set_type_list = ['Z2']
+train_set_type_list = ['eig', 'xorX']
 
 dtypes = {
     'length': int,
@@ -49,8 +50,8 @@ dtypes = {
     'evol_num': int,
     'sample_num': int,
     'train_set_type': str,
-    'entangle_dim': int,
-    'loss': str,
+    # 'entangle_dim': int,
+    'loss_type': str,
     'gate_fidelity': float,
     'spectrum_diff': float,
     'H_diff': float,
@@ -66,7 +67,7 @@ dtypes = {
 for y_axis in y_axis_list:
     fig, ax = plt.subplots()
     for train_set_type in train_set_type_list:
-        para_dict['train_set_type'] = train_set_type
+        para_dict['data_type'] = train_set_type
     
         ax.cla()
         cmap = sns.color_palette('plasma', len(varing_para_set))
@@ -74,7 +75,7 @@ for y_axis in y_axis_list:
         for i, varing_para_value in enumerate(varing_para_set):
             para_dict[varing_para] = varing_para_value
 
-            pic_path = '/data/home/scv7454/run/GraduationProject/pics/PXP/LineChartOf{}/{}/'.format(x_axis.capitalize(), loss)
+            pic_path = '/data/home/scv7454/run/GraduationProject/pics/xorX/LineChartOf{}/{}/'.format(x_axis.capitalize(), loss)
             os.makedirs(pic_path, exist_ok=True)
             # 提取符合条件的行
             filtered_data = data.copy()

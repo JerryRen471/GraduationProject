@@ -42,20 +42,25 @@ if __name__ == "__main__":
         'tau': args.tau
     }
 
+    csv_file_path = '/data/home/scv7454/run/GraduationProject/Data/XXZ_inhomo_(J={})(delta={})(theta={}).csv'.format(model_params['J'], model_params['delta'], model_params['theta'])
+
     m = 0
     tot_gate_fidelity = 0
     tot_spectrum_diff = 0
     tot_similarity = 0
+    tot_H_diff = 0
     for i in range(2):
         m += 1
-        init_train_para, init_test_para, return_model_para, evol_para, nn_para, save_para = pack_params(model_name='XXZ_inhomo', model_para=model_params, device=tc.device('cuda:0'), csv_file_path='/data/home/scv7454/run/GraduationProject/Data/Heis.csv', **train_params)
-        gate_fidelity, spectrum_diff, similarity = run_with_param(init_train_para, init_test_para, return_model_para, evol_para, nn_para, save_para)
+        init_train_para, init_test_para, return_model_para, evol_para, nn_para, save_para = pack_params(model_name='XXZ_inhomo', model_para=model_params, device=tc.device('cuda:0'), csv_file_path=csv_file_path, **train_params)
+        gate_fidelity, spectrum_diff, similarity, H_diff = run_with_param(init_train_para, init_test_para, return_model_para, evol_para, nn_para, save_para)
         print(gate_fidelity, spectrum_diff, similarity)
         tot_gate_fidelity += gate_fidelity
         tot_spectrum_diff += spectrum_diff
         tot_similarity += similarity
+        tot_H_diff += H_diff
     avg_gate_fidelity = tot_gate_fidelity / m
     avg_spectrum_diff = tot_spectrum_diff / m
     avg_similarity = tot_similarity / m
-    print('average_gate_fidelity={}, avgerage_spectrum_diff={}, average_similarity={}'.format(float(avg_gate_fidelity), float(avg_spectrum_diff), float(avg_similarity)))
+    avg_H_diff = tot_H_diff / m
+    print('average_gate_fidelity={}, avgerage_spectrum_diff={}, average_similarity={}, avg_H_diff={}'.format(float(avg_gate_fidelity), float(avg_spectrum_diff), float(avg_similarity), float(H_diff)))
 

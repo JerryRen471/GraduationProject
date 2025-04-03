@@ -53,8 +53,6 @@ dtypes = {
 # 绘制横坐标为总时长(time_interval * evol_num)的不同y轴的折线图，标明参数 *time_interval* 、evol_num、sample_num、train_set_type、loss的组合
 # 对比相同总时长，不同time_interval的影响
 
-
-
 for y_axis in y_axis_list:
     fig, ax = plt.subplots()
     
