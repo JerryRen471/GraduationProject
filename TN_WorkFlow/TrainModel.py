@@ -162,7 +162,7 @@ def ADQC(para=None):
         para = dict(para0, **para)  # 更新para参数
     para['device'] = bf.choose_device(para['device'])
 
-    qc = ADQC_LatentGates(lattice=para['lattice'], num_q=para['length_in'], depth=para['depth'], ini_way=para['ini_way'],
+    qc = ADQC_LatentGates(state_type='mps', lattice=para['lattice'], num_q=para['length_in'], depth=para['depth'], ini_way=para['ini_way'],
                           device=para['device'], dtype=para['dtype'])
     qc.single_state = False  # 切换至多个态演化模式
     return qc
@@ -189,7 +189,7 @@ def VQC(para=None):
         para = dict(para0, **para)  # 更新para参数
     para['device'] = bf.choose_device(para['device'])
 
-    qc = Variational_Quantum_Circuit(lattice=para['lattice'], num_q=para['length_in'], depth=para['depth'], ini_way=para['ini_way'],
+    qc = Variational_Quantum_Circuit(state_type='mps', lattice=para['lattice'], num_q=para['length_in'], depth=para['depth'], ini_way=para['ini_way'],
                           device=para['device'], dtype=para['dtype'])
     qc.single_state = False  # 切换至多个态演化模式
     return qc
@@ -214,16 +214,17 @@ def train(qc, data:dict, para:dict):
     optimizer = Adam(qc.parameters(), lr=para['lr'])
 
     # num_train = int(data.shape[0] * (1-para['test_ratio']))
-    trainset = data['train_set']
+    train_set = data['train_set']
     train_lbs = data['train_label']
-    testset = data['test_set']
+    test_set = data['test_set']
     test_lbs = data['test_label']
     # trainset, train_lbs = split_time_series(
     #     data[:num_train], para['length'], para['device'], para['dtype'])
     # testset, test_lbs = split_time_series(
     #     data[num_train-para['length']:], para['length'], para['device'], para['dtype'])
-    trainloader = DataLoader(TensorDataset(trainset, train_lbs), batch_size=para['batch_size'], shuffle=False)
-    testloader = DataLoader(TensorDataset(testset, test_lbs), batch_size=para['batch_size'], shuffle=False)
+
+    # trainloader = DataLoader(TensorDataset(trainset, train_lbs), batch_size=para['batch_size'], shuffle=False)
+    # testloader = DataLoader(TensorDataset(testset, test_lbs), batch_size=para['batch_size'], shuffle=False)
 
     loss_train_rec = list()
     loss_test_rec = list()
@@ -238,21 +239,36 @@ def train(qc, data:dict, para:dict):
         train_batches = 0
         test_batches = 0
         # print(t)
-        for n, (samples, lbs) in enumerate(trainloader):
-            psi0 = samples
-            for _ in range(para['recurrent_time']):
-                psi0 = qc(psi0)
-            psi1 = psi0
-            loss = loss_fun(psi1, lbs)
-            # print(loss.requires_grad)
-            loss.backward()
-            optimizer.step()
-            optimizer.zero_grad()
-            loss_tmp += loss.item()
-            fide = fidelity(psi1, lbs)
-            fide_sr = fide.abs()
-            train_fide_tmp += fide_sr
-            train_batches += 1
+        ############ With No Batch ############
+        psi0 = train_set
+        for _ in range(para['recurrent_time']):
+            psi0 = qc(psi0)
+        psi1 = psi0
+        loss = loss_fun(psi1, train_lbs)
+        # print(loss.requires_grad)
+        loss.backward()
+        optimizer.step()
+        optimizer.zero_grad()
+        loss_tmp += loss.item()
+        fide = fidelity(psi1, train_lbs)
+        fide_sr = fide.abs()
+        train_fide_tmp += fide_sr
+
+        # for n, (samples, lbs) in enumerate(trainloader):
+        #     psi0 = samples
+        #     for _ in range(para['recurrent_time']):
+        #         psi0 = qc(psi0)
+        #     psi1 = psi0
+        #     loss = loss_fun(psi1, lbs)
+        #     # print(loss.requires_grad)
+        #     loss.backward()
+        #     optimizer.step()
+        #     optimizer.zero_grad()
+        #     loss_tmp += loss.item()
+        #     fide = fidelity(psi1, lbs)
+        #     fide_sr = fide.abs()
+        #     train_fide_tmp += fide_sr
+        #     train_batches += 1
 
         if (t+1) % para['print_time'] == 0:
             loss_train_rec.append(loss_tmp / train_batches)

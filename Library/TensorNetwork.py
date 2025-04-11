@@ -1025,6 +1025,7 @@ class TensorTrain_pack(TensorNetwork_pack):
         super().__init__(chi=chi, device=device, dtype=dtype)
 
         self.length = length
+        self.number = tensor_packs[0].shape[0]
         self.phydim = phydim
         self.device = device
         self.dtype = dtype
@@ -1433,6 +1434,17 @@ def inner_mps_pack(mps1:TensorTrain_pack, mps2:TensorTrain_pack):
         # result.flatten((0, 1))
         result.merge_nodes((0, 1))
     return tc.squeeze(result.node_list[0])
+
+def one_body_obs_from_mps_pack(mps:TensorTrain_pack, obs:list):
+    obs_exp = tc.zeros((mps.number, len(obs), mps.length), device=mps.device, dtype=mps.dtype)
+    obs_num = len(obs)
+    for i in range(mps.length):
+        mps.move_center_to(i)
+        center_tensor = mps.node_list[i]
+        for j in range(obs_num):
+            ob_exp = tc.einsum('nijk, jl, nilk->n', center_tensor.conj(), obs[j], center_tensor)
+            obs_exp[:, j, i] = ob_exp
+    return obs_exp
 
 def multi_mags_from_mps_pack(mps:TensorTrain_pack, spins:list):
     # mps_ = deepcopy(mps)

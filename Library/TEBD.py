@@ -8,7 +8,7 @@ def multiply_list(list):
         res *= i
     return res
 
-def TEBD(Hamiltonian:dict, tau:float, t_steps:list, init_mps:TN.TensorTrain_pack, obs:list):
+def TEBD(Hamiltonian:dict, tau:float, time_tot:float, print_time:float, init_mps:TN.TensorTrain_pack, obs:list):
     '''
     Hamiltonian contains {'Hi':[H0, H1, H2, ...], 'pos':[pos0, pos1, pos2, ...]}
     tau is the time step
@@ -18,22 +18,32 @@ def TEBD(Hamiltonian:dict, tau:float, t_steps:list, init_mps:TN.TensorTrain_pack
     '''
     Hi = Hamiltonian['Hi']
     pos = Hamiltonian['pos']
-    total_t_list = [i for i in range(int(t_steps[-1] // tau) + 1)]
+    total_t_list = [i for i in range(1, int(time_tot // tau) + 1)]
+    print_t = int(print_time // tau)
     mps_evol = []
+    # obs_evol = []
+    gate_list = []
+    for i, hi in enumerate(Hi):
+        shape = list(hi.shape)
+        mid = len(shape)//2
+        mat_shape = [multiply_list(shape[:mid]), multiply_list(shape[mid:])]
+        gate_i = tc.matrix_exp(-1j * hi.reshape(mat_shape) * tau / 2).reshape(shape)
+        gate_list.append(gate_i)
     for t in total_t_list:
-        for i, hi in enumerate(Hi):
-            shape = list(hi.shape)
-            mid = len(shape)//2
-            mat_shape = [multiply_list(shape[:mid]), multiply_list(shape[mid:])]
-            gate_i = tc.matrix_exp(-1j * hi.reshape(mat_shape) * tau / 2).reshape(shape)
+        for i, gate_i in enumerate(gate_list):
+            # shape = list(hi.shape)
+            # mid = len(shape)//2
+            # mat_shape = [multiply_list(shape[:mid]), multiply_list(shape[mid:])]
+            # gate_i = tc.matrix_exp(-1j * hi.reshape(mat_shape) * tau / 2).reshape(shape)
             init_mps = init_mps.act_n_body_gate_sequence(gate_i, pos[i], set_center=0)
-            print('-'*20)
-            print('t = ', t * tau)
-            for node_idx, node in enumerate(init_mps.node_list):
-                print('node_', node_idx, '.shape=', node.shape)
-        # if t in t_steps:
-        #     print(t * tau)
-        #     mps_evol.append(TN.copy_from_mps_pack(init_mps))
+            # print('-'*20)
+            # print('t = ', t * tau)
+            # for node_idx, node in enumerate(init_mps.node_list):
+            #     print('node_', node_idx, '.shape=', node.shape)
+        if t % print_t == 0:
+            # print(t * tau)
+            mps_evol.append(TN.copy_from_mps_pack(init_mps))
+            # obs_evol.append(TN.one_body_obs_from_mps_pack(init_mps, obs))
     return mps_evol
 
 def gen_1d_pos_sequence(length:int, single_pos:list, repeat_interval:int=1):

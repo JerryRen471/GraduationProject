@@ -25,7 +25,7 @@ def pure_states_evolution(states:tt_pack, gates:list, which_where:list):
         states.act_two_body_gate(gates[which_where[n][0]], which_where[n][1:])
     return states
 
-def PXP_mul_states_evl(states, para=None):
+def PXP_mul_states_evol(states, para=None):
     para_def = dict()
     para_def['length'] = 10
     para_def['time_tot'] = 1
@@ -36,18 +36,20 @@ def PXP_mul_states_evl(states, para=None):
     if para is None:
         para = dict()
     para = dict(para_def, **para)
-    para['time_it'] = round(para['time_tot'] / para['tau'])
-    para['print_time'] = para['print_time'] // para['tau']
     P = tc.zeros([2, 2], device=para['device'], dtype=para['dtype'])
     P[0, 0] = 1+0.j
     sigma_x = tc.zeros([2, 2], device=para['device'], dtype=para['dtype'])
     sigma_x[0, 1] = sigma_x[1, 0] = 1+0.j
-    hamilt = tc.kron(P, tc.kron(sigma_x, P))
-    hamilt_dict = gen_1d_hamilt_dict(length=para['length'], hamilt_list=[hamilt], single_pos_list=[0,1,2])
-    evol_states = TEBD(hamilt_dict, tau=para['tau'], t_steps=para['print_time'], device=para['device'], dtype=para['dtype'])
+    
+    hamilt = tc.kron(P, tc.kron(sigma_x, P)).reshape([2] * 6)
+    hamilt_dict = gen_1d_hamilt_dict(length=para['length'], hamilt_list=[hamilt], single_pos_list=[[0,1,2]])
+    evol_states = TEBD(hamilt_dict, tau=para['tau'], time_tot=para['time_tot'], print_time=para['print_time'], init_mps=states, obs=[])
     return evol_states
 
-def XXZ_inhomo_mul_states_evl(states, para=None):
+def Heis_mul_states_evol(states, para=None):
+    pass
+
+def XXZ_inhomo_mul_states_evol(states, para=None):
     para_def = dict()
     para_def['J'] = 1
     para_def['delta'] = 1
@@ -94,7 +96,7 @@ def XXZ_inhomo_mul_states_evl(states, para=None):
             list_states.append(deepcopy(states))
     return list_states
 
-def xorX_mul_states_evl(states, para=None):
+def xorX_mul_states_evol(states, para=None):
     para_def = dict()
     # model_para
     para_def['length'] = 10
@@ -279,14 +281,14 @@ def main(model_name:str, model_para:dict, init_states:tc.Tensor, evol_para:dict,
             evol_states = Quantum_Sun_evol(init_states, dict(model_para, **evol_para))
             evol_mat = Quantum_Sun_evol(E, dict(model_para, **evol_mat_para)).reshape(E.shape[0], -1)
         elif model_name == 'XXZ_inhomo':
-            evol_states = XXZ_inhomo_mul_states_evl(init_states, dict(model_para, **evol_para))
-            evol_mat = XXZ_inhomo_mul_states_evl(E, dict(model_para, **evol_mat_para)).reshape(E.shape[0], -1)
+            evol_states = XXZ_inhomo_mul_states_evol(init_states, dict(model_para, **evol_para))
+            evol_mat = XXZ_inhomo_mul_states_evol(E, dict(model_para, **evol_mat_para)).reshape(E.shape[0], -1)
         elif model_name == 'PXP':
-            evol_states = PXP_mul_states_evl(init_states, dict(model_para, **evol_para))
-            evol_mat = PXP_mul_states_evl(E, dict(model_para, **evol_mat_para)).reshape(E.shape[0], -1)
+            evol_states = PXP_mul_states_evol(init_states, dict(model_para, **evol_para))
+            evol_mat = PXP_mul_states_evol(E, dict(model_para, **evol_mat_para)).reshape(E.shape[0], -1)
         elif model_name == 'xorX':
-            evol_states = xorX_mul_states_evl(init_states, dict(model_para, **evol_para))
-            evol_mat = xorX_mul_states_evl(E, dict(model_para, **evol_mat_para)).reshape(E.shape[0], -1)
+            evol_states = xorX_mul_states_evol(init_states, dict(model_para, **evol_para))
+            evol_mat = xorX_mul_states_evol(E, dict(model_para, **evol_mat_para)).reshape(E.shape[0], -1)
         elif model_name == 'random_circuit':
             evol_states = random_circuit(init_states, dict(model_para, **evol_para))
             evol_mat = random_circuit(E, dict(model_para, **evol_mat_para)).reshape(E.shape[0], -1)
@@ -298,11 +300,11 @@ def main(model_name:str, model_para:dict, init_states:tc.Tensor, evol_para:dict,
         if model_name == 'Quantum_Sun':
             evol_states = Quantum_Sun_evol(init_states, dict(model_para, **evol_para))
         elif model_name == 'XXZ_inhomo':
-            evol_states = XXZ_inhomo_mul_states_evl(init_states, dict(model_para, **evol_para))
+            evol_states = XXZ_inhomo_mul_states_evol(init_states, dict(model_para, **evol_para))
         elif model_name == 'PXP':
-            evol_states = PXP_mul_states_evl(init_states, dict(model_para, **evol_para))
+            evol_states = PXP_mul_states_evol(init_states, dict(model_para, **evol_para))
         elif model_name == 'xorX':
-            evol_states = xorX_mul_states_evl(init_states, dict(model_para, **evol_para))
+            evol_states = xorX_mul_states_evol(init_states, dict(model_para, **evol_para))
         elif model_name == 'random_circuit':
             evol_states = random_circuit(init_states, dict(model_para, **evol_para))
         else:
