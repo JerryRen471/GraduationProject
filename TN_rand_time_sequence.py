@@ -168,9 +168,9 @@ def gen_select(gen_type:str):
         gen = rand_states
     elif gen_type == 'h':
         gen = Haar_random_product_states
-    # else:
-    #     gen = None
-    #     print('-'*10+'\nArgument --gen_type must be the combination of \'n\' and \'d\'!\n'+'-'*10)
+    else:
+        gen = None
+        print('-'*10+'\nArgument --gen_type must be the combination of \'n\' and \'d\'!\n'+'-'*10)
     return gen
 
 def label_generate(data:tt_pack, para):

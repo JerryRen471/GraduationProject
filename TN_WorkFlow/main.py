@@ -6,6 +6,7 @@ import ast
 import os
 import re
 import torch as tc
+from copy import deepcopy
 
 def search_qc(folder_path, sample_num, evol_num):
     # 使用正则表达式匹配文件名中的 evol 和 sample
@@ -58,8 +59,8 @@ def run_with_param(init_train_para, init_test_para, model_para, evol_para, nn_pa
     evol_train_para['tau'] = evol_para['tau']
     evol_train_para['print_time'] = evol_para['time_interval']
     evol_train_para['time_tot'] = evol_para['time_interval'] * evol_para['evol_num']
-    train_label, evol_mat = TimeEvol.main(model_name=model_name, model_para=model_para, init_states=train_init, evol_para=evol_train_para, return_mat=True)
-    train_input = tc.cat((train_init.unsqueeze(1), train_label[:, :-1]), dim=1)
+    train_label = TimeEvol.main(model_name=model_name, model_para=model_para, init_states=train_init, evol_para=evol_train_para, return_mat=True)
+    train_input = [train_init] + train_label[:-1]
 
     test_init = InitStates.main(init_test_para)
     evol_test_para = dict()
@@ -67,14 +68,14 @@ def run_with_param(init_train_para, init_test_para, model_para, evol_para, nn_pa
     evol_test_para['print_time'] = evol_para['time_interval']
     evol_test_para['time_tot'] = evol_para['time_interval']
     test_label = TimeEvol.main(model_name=model_name, model_para=model_para, init_states=test_init, evol_para=evol_test_para)
-    test_input = tc.cat((test_init.unsqueeze(1), test_label[:, :-1]), dim=1)
+    test_input = [test_init] + test_label[:-1]
 
     data = dict()
-    merge = lambda x: x.reshape(x.shape[0]*x.shape[1], *x.shape[2:])
-    data['train_set'] = merge(train_input)
-    data['train_label'] = merge(train_label)
-    data['test_set'] = merge(test_input)
-    data['test_label'] = merge(test_label)
+    
+    data['train_set'] = DataProcess.merge_TN_pack(train_input)
+    data['train_label'] = DataProcess.merge_TN_pack(train_label)
+    data['test_set'] = DataProcess.merge_TN_pack(test_input)
+    data['test_label'] = DataProcess.merge_TN_pack(test_label)
 
     # 加载并训练神经网络
     folder = "/{model_name}/length{length}/loss_{loss}/{time_interval}/{data_type}".format(
@@ -88,6 +89,7 @@ def run_with_param(init_train_para, init_test_para, model_para, evol_para, nn_pa
         # os.remove(data_path + '/' + old_qc_path)
     qc, results, nn_para = TrainModel.main(qc_type='ADQC', init_param=old_param, data=data, nn_para=nn_para)
     new_qc_path = data_path + '/qc_param_sample_{}_evol_{}.pt'.format(init_train_para['number'], evol_para['evol_num'])
+    
     tc.save(qc.state_dict(), new_qc_path)
     # for key, value in results.items():
     #     results[key] = value.cpu()
@@ -95,16 +97,6 @@ def run_with_param(init_train_para, init_test_para, model_para, evol_para, nn_pa
 
     pic_path = "GraduationProject/pics" + folder
     os.makedirs(pic_path, exist_ok=True)
-    qc.single_state = False
-    E = tc.eye(2**nn_para['length_in'], dtype=nn_para['dtype'], device=nn_para['device'])
-    shape_ = [E.shape[0]] + [2] * nn_para['length_in']
-    E = E.reshape(shape_)
-    with tc.no_grad():
-        for _ in range(nn_para['recurrent_time']):
-            E = qc(E)
-        qc_mat = E.reshape([E.shape[0], -1])
-    print('qc_mat.shape:', qc_mat.shape)
-    print('evol_mat.shape:', evol_mat.shape)
     
     return_tuple = DataProcess.main(qc_mat=qc_mat.cpu(), evol_mat=evol_mat.cpu(), results=results, pic_path=pic_path, **save_para)
     return return_tuple

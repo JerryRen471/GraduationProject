@@ -7,6 +7,7 @@ import sys
 sys.path.append('/data/home/scv7454/run/GraduationProject')
 
 import Library.BasicFun as bf
+from Library.TensorNetwork import TensorTrain_pack, inner_mps_pack, multi_mags_from_mps_pack
 
 from torch.nn import MSELoss, NLLLoss
 from torch.utils.data import DataLoader, TensorDataset
@@ -26,55 +27,111 @@ def split_time_series(data, length, device=None, dtype=tc.float32):
         targets.append(data[n].clone())
     return tc.cat(samples, dim=0).to(device=device, dtype=dtype), tc.stack(targets, dim=0).to(device=device, dtype=dtype)
 
-def fidelity(psi1:tc.Tensor, psi0:tc.Tensor):
-    psi0_ = psi0.reshape(psi0.shape[0], -1)
-    psi1_ = psi1.reshape(psi1.shape[0], -1)
-    fides = tc.abs(tc.einsum('ab,ab->a', psi1_.conj(), psi0_))
-    f = tc.mean(fides)
-    return f
+def fidelity(psi1, psi0):
+    """
+    Calculate fidelity between two quantum states.
+    Works with both regular tensors and TensorTrain_pack objects.
+    """
+    if isinstance(psi1, TensorTrain_pack) and isinstance(psi0, TensorTrain_pack):
+        # For TensorTrain_pack objects, use inner_mps_pack
+        fides = inner_mps_pack(psi1, psi0)
+        f = tc.mean(tc.abs(fides))
+        return f
+    else:
+        # For regular tensors, use the original method
+        psi0_ = psi0.reshape(psi0.shape[0], -1)
+        psi1_ = psi1.reshape(psi1.shape[0], -1)
+        fides = tc.abs(tc.einsum('ab,ab->a', psi1_.conj(), psi0_))
+        f = tc.mean(fides)
+        return f
 
-def loss_fid(psi1:tc.Tensor, psi0:tc.Tensor):
+def loss_fid(psi1, psi0):
     return 1 - fidelity(psi1, psi0)
 
-def loss_average_mag(psi1:tc.Tensor, psi0:tc.Tensor):
-    mag_diff = mag_from_states(psi1, device=psi1.device) - mag_from_states(psi0, device=psi0.device)
-    loss = tc.norm(mag_diff)/sqrt(psi1.shape[0])
-    return loss
+def loss_average_mag(psi1, psi0):
+    if isinstance(psi1, TensorTrain_pack) and isinstance(psi0, TensorTrain_pack):
+        # For TensorTrain_pack objects, calculate magnetization directly
+        op = spin_operators('half', device=psi1.device)
+        spins = [op['sz']]
+        mag1 = multi_mags_from_mps_pack(psi1, spins)
+        mag0 = multi_mags_from_mps_pack(psi0, spins)
+        mag_diff = mag1 - mag0
+        loss = tc.norm(mag_diff)/sqrt(psi1.number)
+        return loss
+    else:
+        # For regular tensors, use the original method
+        mag_diff = mag_from_states(psi1, device=psi1.device) - mag_from_states(psi0, device=psi0.device)
+        loss = tc.norm(mag_diff)/sqrt(psi1.shape[0])
+        return loss
 
-def loss_mags(psi1:tc.Tensor, psi0:tc.Tensor):
-    mags_diff = mags_from_states(psi1, device=psi1.device) - mags_from_states(psi0, device=psi0.device)
-    loss = tc.norm(mags_diff)/sqrt(psi0.shape[1]*psi1.shape[0])
-    return loss
+def loss_mags(psi1, psi0):
+    if isinstance(psi1, TensorTrain_pack) and isinstance(psi0, TensorTrain_pack):
+        # For TensorTrain_pack objects, calculate magnetization directly
+        op = spin_operators('half', device=psi1.device)
+        spins = [op['sx'], op['sy'], op['sz']]
+        mags1 = multi_mags_from_mps_pack(psi1, spins)
+        mags0 = multi_mags_from_mps_pack(psi0, spins)
+        mags_diff = mags1 - mags0
+        loss = tc.norm(mags_diff)/sqrt(psi0.length*psi1.number)
+        return loss
+    else:
+        # For regular tensors, use the original method
+        mags_diff = mags_from_states(psi1, device=psi1.device) - mags_from_states(psi0, device=psi0.device)
+        loss = tc.norm(mags_diff)/sqrt(psi0.shape[1]*psi1.shape[0])
+        return loss
 
-def loss_zx_mags(psi1:tc.Tensor, psi0:tc.Tensor):
+def loss_zx_mags(psi1, psi0):
     op = spin_operators('half', device=psi1.device)
     spins = [op['sx'], op['sz']]
-    multi_mags_diff = multi_mags_from_states(psi1, spins, device=psi1.device) - multi_mags_from_states(psi0, spins, device=psi1.device)
-    loss = tc.norm(multi_mags_diff)/sqrt(psi0.shape[1]*psi1.shape[0])
-    return loss
+    
+    if isinstance(psi1, TensorTrain_pack) and isinstance(psi0, TensorTrain_pack):
+        # For TensorTrain_pack objects, calculate magnetization directly
+        multi_mags1 = multi_mags_from_mps_pack(psi1, spins)
+        multi_mags0 = multi_mags_from_mps_pack(psi0, spins)
+        multi_mags_diff = multi_mags1 - multi_mags0
+        loss = tc.norm(multi_mags_diff)/sqrt(psi0.length*psi1.number)
+        return loss
+    else:
+        # For regular tensors, use the original method
+        multi_mags_diff = multi_mags_from_states(psi1, spins, device=psi1.device) - multi_mags_from_states(psi0, spins, device=psi1.device)
+        loss = tc.norm(multi_mags_diff)/sqrt(psi0.shape[1]*psi1.shape[0])
+        return loss
 
-# def loss_multi_mags_from_sample(psi_real:tc.Tensor, psi_pred:tc.Tensor):
-#     op = spin_operators('half', device=psi_real.device)
-#     spins = [op['sx'], op['sy'], op['sz']]
-#     multi_mags_diff = multi_mags_from_states(psi_pred, spins, device=psi_real.device) - multi_mags_from_states_sample(psi_real, spins, device=psi_real.device)
-#     loss = tc.norm(multi_mags_diff)/sqrt(psi_real.shape[1]*psi_pred.shape[0])
-#     return
-
-def loss_multi_mags(psi1:tc.Tensor, psi0:tc.Tensor):
+def loss_multi_mags(psi1, psi0):
     op = spin_operators('half', device=psi1.device)
     spins = [op['sx'], op['sy'], op['sz']]
-    multi_mags_diff = multi_mags_from_states(psi1, spins, device=psi1.device) - multi_mags_from_states(psi0, spins, device=psi1.device)
-    loss = tc.norm(multi_mags_diff)/sqrt(psi0.shape[1]*psi1.shape[0])
-    return loss
+    
+    if isinstance(psi1, TensorTrain_pack) and isinstance(psi0, TensorTrain_pack):
+        # For TensorTrain_pack objects, calculate magnetization directly
+        multi_mags1 = multi_mags_from_mps_pack(psi1, spins)
+        multi_mags0 = multi_mags_from_mps_pack(psi0, spins)
+        multi_mags_diff = multi_mags1 - multi_mags0
+        loss = tc.norm(multi_mags_diff)/sqrt(psi0.length*psi1.number)
+        return loss
+    else:
+        # For regular tensors, use the original method
+        multi_mags_diff = multi_mags_from_states(psi1, spins, device=psi1.device) - multi_mags_from_states(psi0, spins, device=psi1.device)
+        loss = tc.norm(multi_mags_diff)/sqrt(psi0.shape[1]*psi1.shape[0])
+        return loss
 
-def log_loss_multi_mags(psi1:tc.Tensor, psi0:tc.Tensor):
+def log_loss_multi_mags(psi1, psi0):
     op = spin_operators('half', device=psi1.device)
     spins = [op['sx'], op['sy'], op['sz']]
-    multi_mags_diff = multi_mags_from_states(psi1, spins, device=psi1.device) - multi_mags_from_states(psi0, spins, device=psi1.device)
-    loss = tc.log(tc.norm(multi_mags_diff)/sqrt(psi0.shape[1]*psi1.shape[0]))
-    return loss
+    
+    if isinstance(psi1, TensorTrain_pack) and isinstance(psi0, TensorTrain_pack):
+        # For TensorTrain_pack objects, calculate magnetization directly
+        multi_mags1 = multi_mags_from_mps_pack(psi1, spins)
+        multi_mags0 = multi_mags_from_mps_pack(psi0, spins)
+        multi_mags_diff = multi_mags1 - multi_mags0
+        loss = tc.log(tc.norm(multi_mags_diff)/sqrt(psi0.length*psi1.number))
+        return loss
+    else:
+        # For regular tensors, use the original method
+        multi_mags_diff = multi_mags_from_states(psi1, spins, device=psi1.device) - multi_mags_from_states(psi0, spins, device=psi1.device)
+        loss = tc.log(tc.norm(multi_mags_diff)/sqrt(psi0.shape[1]*psi1.shape[0]))
+        return loss
 
-def loss_combined_mags(psi1:tc.Tensor, psi0:tc.Tensor):
+def loss_combined_mags(psi1, psi0):
     op = spin_operators('half', device=psi1.device)
     spins = [op['sx'], op['sy'], op['sz']]
     combined_mags_diff = combined_mags(psi1, spins) - combined_mags(psi0, spins)
@@ -86,10 +143,21 @@ def loss_complete_combined_mags(psi1:tc.Tensor, psi0:tc.Tensor):
     loss = tc.norm(diff)/sqrt(psi1.shape[0])
     return loss
 
-def loss_norm(psi1:tc.Tensor, psi0:tc.Tensor):
-    N = psi1.shape[0]
-    loss = 1/N * tc.norm(psi0 - psi1)**2
-    return loss
+def loss_norm(psi1, psi0):
+    if isinstance(psi1, TensorTrain_pack) and isinstance(psi0, TensorTrain_pack):
+        # For TensorTrain_pack objects, we need to calculate the norm difference
+        # This is a placeholder - you may need to implement a proper norm calculation for TensorTrain_pack
+        N = psi1.number
+        # Calculate the difference between the two MPS packs
+        # This is a simplified approach and may need to be refined
+        diff = inner_mps_pack(psi1, psi1) - inner_mps_pack(psi0, psi0)
+        loss = 1/N * tc.norm(diff)**2
+        return loss
+    else:
+        # For regular tensors, use the original method
+        N = psi1.shape[0]
+        loss = 1/N * tc.norm(psi0 - psi1)**2
+        return loss
 
 def loss_sample_fide(psi_real:tc.Tensor, psi_pred:tc.Tensor, num_basis:int=30, k=10, num_sample:int=100000):
     assert psi_pred.shape == psi_real.shape

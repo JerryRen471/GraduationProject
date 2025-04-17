@@ -5,6 +5,23 @@ import scipy.linalg
 
 from matplotlib import pyplot as plt
 import pandas as pd
+import Library.TensorNetwork as TN
+
+def merge_TN_pack(TN_pack_list):
+    '''
+    The TN_pack in TN_pack_list must have the same structure, including length, chi, center, device, dtype, etc.
+    '''
+    new_node_list = deepcopy(TN_pack_list[0].node_list)
+    for i in range(len(TN_pack_list) - 1):
+        assert TN_pack_list[i].length == TN_pack_list[i+1].length
+        assert TN_pack_list[i].chi == TN_pack_list[i+1].chi
+        assert TN_pack_list[i].center == TN_pack_list[i+1].center
+        assert TN_pack_list[i].device == TN_pack_list[i+1].device
+        assert TN_pack_list[i].dtype == TN_pack_list[i+1].dtype
+        for j, node in enumerate(TN_pack_list[i+1].node_list):
+            new_node_list[j] = tc.cat([new_node_list[j], node], dim=0)
+    merged_TN = TN.TensorTrain_pack(tensor_packs=new_node_list, length=TN_pack_list[0].length, chi=TN_pack_list[0].chi, center=TN_pack_list[0].center, device=TN_pack_list[0].device, dtype=TN_pack_list[0].dtype, initialize=False)
+    return merged_TN
 
 def cal_gate_fidelity(E:tc.Tensor, U:tc.Tensor):
     n = E.shape[0]

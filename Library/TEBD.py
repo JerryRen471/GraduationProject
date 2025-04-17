@@ -31,19 +31,9 @@ def TEBD(Hamiltonian:dict, tau:float, time_tot:float, print_time:float, init_mps
         gate_list.append(gate_i)
     for t in total_t_list:
         for i, gate_i in enumerate(gate_list):
-            # shape = list(hi.shape)
-            # mid = len(shape)//2
-            # mat_shape = [multiply_list(shape[:mid]), multiply_list(shape[mid:])]
-            # gate_i = tc.matrix_exp(-1j * hi.reshape(mat_shape) * tau / 2).reshape(shape)
             init_mps = init_mps.act_n_body_gate_sequence(gate_i, pos[i], set_center=0)
-            # print('-'*20)
-            # print('t = ', t * tau)
-            # for node_idx, node in enumerate(init_mps.node_list):
-            #     print('node_', node_idx, '.shape=', node.shape)
         if t % print_t == 0:
-            # print(t * tau)
             mps_evol.append(TN.copy_from_mps_pack(init_mps))
-            # obs_evol.append(TN.one_body_obs_from_mps_pack(init_mps, obs))
     return mps_evol
 
 def gen_1d_pos_sequence(length:int, single_pos:list, repeat_interval:int=1):

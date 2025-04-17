@@ -22,7 +22,7 @@ def pure_states_evolution(states:tt_pack, gates:list, which_where:list):
     1 and 2, and gate 1 on spins 0 and 1
     """    
     for n in range(len(which_where)):
-        states.act_two_body_gate(gates[which_where[n][0]], which_where[n][1:])
+        states.act_n_body_gate(gates[which_where[n][0]], which_where[n][1:])
     return states
 
 def PXP_mul_states_evol(states, para=None):
@@ -122,28 +122,33 @@ def xorX_mul_states_evol(states, para=None):
     eye = tc.zeros([2, 2], device=para['device'], dtype=para['dtype'])
     eye[0, 0] = 1+0.j
     eye[1, 1] = 1+0.j
-    hamilt_1 = para['lamda'] * (tc.kron(eye, tc.kron(sigma_x, eye)) - tc.kron(sigma_z, tc.kron(sigma_x, sigma_z)))
-    hamilt_2 = para['delta'] * sigma_z
-    hamilt_3 = para['J'] * tc.kron(sigma_z, sigma_z)
-    gate_1 = tc.matrix_exp(- 1j * para['tau'] * hamilt_1).reshape([2] * 6).to(dtype=para['dtype'])
-    gate_2 = tc.matrix_exp(- 1j * para['tau'] * hamilt_2).reshape([2] * 2).to(dtype=para['dtype'])
-    gate_3 = tc.matrix_exp(- 1j * para['tau'] * hamilt_3).reshape([2] * 4).to(dtype=para['dtype'])
-    gate_list = [gate_1, gate_2, gate_3]
-    which_where = []
-    for i in range(1, para['length'] - 1):
-        # gate_list.append(gate)
-        which_where.append([0, i-1, i, i+1])
-    for i in range(0, para['length']):
-        which_where.append([1, i])
-    for i in range(0, para['length'] - 1):
-        which_where.append([2, i, i+1])
-    list_states = list()
-    states = deepcopy(states)
-    for t in range(para['time_it']):
-        states = pure_states_evolution(states, gate_list, which_where)
-        if t % para['print_time'] == para['print_time']-1:
-            list_states.append(deepcopy(states))
-    return list_states
+    hamilt_1 = para['lamda'] * (tc.kron(eye, tc.kron(sigma_x, eye)) - tc.kron(sigma_z, tc.kron(sigma_x, sigma_z))).reshape([2]*6)
+    hamilt_2 = para['delta'] * sigma_z.reshape([2]*2)
+    hamilt_3 = para['J'] * tc.kron(sigma_z, sigma_z).reshape([2]*4)
+    hamilt = [hamilt_1, hamilt_2, hamilt_3]
+    hamilt_dict = gen_1d_hamilt_dict(length=para['length'], hamilt_list=hamilt, single_pos_list=[[0,1,2], [0], [0,1]])
+    evol_states = TEBD(hamilt_dict, tau=para['tau'], time_tot=para['time_tot'], print_time=para['print_time'], init_mps=states, obs=[])
+    return evol_states
+
+    # gate_1 = tc.matrix_exp(- 1j * para['tau'] * hamilt_1).reshape([2] * 6).to(dtype=para['dtype'])
+    # gate_2 = tc.matrix_exp(- 1j * para['tau'] * hamilt_2).reshape([2] * 2).to(dtype=para['dtype'])
+    # gate_3 = tc.matrix_exp(- 1j * para['tau'] * hamilt_3).reshape([2] * 4).to(dtype=para['dtype'])
+    # gate_list = [gate_1, gate_2, gate_3]
+    # which_where = []
+    # for i in range(1, para['length'] - 1):
+    #     # gate_list.append(gate)
+    #     which_where.append([0, i-1, i, i+1])
+    # for i in range(0, para['length']):
+    #     which_where.append([1, i])
+    # for i in range(0, para['length'] - 1):
+    #     which_where.append([2, i, i+1])
+    # list_states = list()
+    # states = deepcopy(states)
+    # for t in range(para['time_it']):
+    #     states = pure_states_evolution(states, gate_list, which_where)
+    #     if t % para['print_time'] == para['print_time']-1:
+    #         list_states.append(deepcopy(states))
+    # return list_states
 
 def Quantum_Sun_evol(states, para=None):
     para_def = {
@@ -257,44 +262,42 @@ def main(model_name:str, model_para:dict, init_states:tc.Tensor, evol_para:dict,
     Parameters:
     model_name (str): Name of the model, supports 'Quantum_Sun', 'XXZ_inhomo', 'PXP', 'xorX'.
     model_para (dict): Parameters for the model.
-    train_init_states (Tensor): Initial quantum states. The shape of the tensor should be (sample_num, *[site_dim] * length).
-    test_init_states (Tensor): Initial quantum states. The shape of the tensor should be (sample_num, *[site_dim] * length).
+    train_init_states (TensorTrain_pack): Initial quantum states.
+    test_init_states (TensorTrain_pack): Initial quantum states.
     evol_para (dict): Parameters for evolution.
 
     Returns:
-    tuple: A tuple containing two elements:
-        - inputs (Tensor): Input features with shape (sample_num * (time_step-1), *[site_dim] * length).
-        - labels (Tensor): Labels with shape (sample_num * (time_step-1), *[site_dim] * length).
+    list: A list containing evolved quantum states, which are in the form of TensorTrain_pack.
     
     Raises:
     ValueError: If the provided model name is invalid.
     """
     if return_mat:
         para = dict(model_para, **evol_para)
-        E = tc.eye(2**para['length'], dtype=para['dtype'], device=para['device'])
-        shape_ = [E.shape[0]] + [2] * para['length']
-        E = E.reshape(shape_)
+        # E = tc.eye(2**para['length'], dtype=para['dtype'], device=para['device'])
+        # shape_ = [E.shape[0]] + [2] * para['length']
+        # E = E.reshape(shape_)
         evol_mat_para = dict(evol_para)
         evol_mat_para['time_tot'] = evol_para['print_time']
 
         if model_name == 'Quantum_Sun':
             evol_states = Quantum_Sun_evol(init_states, dict(model_para, **evol_para))
-            evol_mat = Quantum_Sun_evol(E, dict(model_para, **evol_mat_para)).reshape(E.shape[0], -1)
+            # evol_mat = Quantum_Sun_evol(E, dict(model_para, **evol_mat_para)).reshape(E.shape[0], -1)
         elif model_name == 'XXZ_inhomo':
             evol_states = XXZ_inhomo_mul_states_evol(init_states, dict(model_para, **evol_para))
-            evol_mat = XXZ_inhomo_mul_states_evol(E, dict(model_para, **evol_mat_para)).reshape(E.shape[0], -1)
+            # evol_mat = XXZ_inhomo_mul_states_evol(E, dict(model_para, **evol_mat_para)).reshape(E.shape[0], -1)
         elif model_name == 'PXP':
             evol_states = PXP_mul_states_evol(init_states, dict(model_para, **evol_para))
-            evol_mat = PXP_mul_states_evol(E, dict(model_para, **evol_mat_para)).reshape(E.shape[0], -1)
+            # evol_mat = PXP_mul_states_evol(E, dict(model_para, **evol_mat_para)).reshape(E.shape[0], -1)
         elif model_name == 'xorX':
             evol_states = xorX_mul_states_evol(init_states, dict(model_para, **evol_para))
-            evol_mat = xorX_mul_states_evol(E, dict(model_para, **evol_mat_para)).reshape(E.shape[0], -1)
+            # evol_mat = xorX_mul_states_evol(E, dict(model_para, **evol_mat_para)).reshape(E.shape[0], -1)
         elif model_name == 'random_circuit':
             evol_states = random_circuit(init_states, dict(model_para, **evol_para))
-            evol_mat = random_circuit(E, dict(model_para, **evol_mat_para)).reshape(E.shape[0], -1)
+            # evol_mat = random_circuit(E, dict(model_para, **evol_mat_para)).reshape(E.shape[0], -1)
         else:
             raise ValueError
-        return evol_states, evol_mat
+        return evol_states
     
     else:
         if model_name == 'Quantum_Sun':
