@@ -90,7 +90,7 @@ def run_with_param(init_train_para, init_test_para, model_para, evol_para, nn_pa
     qc, results, nn_para = TrainModel.main(qc_type='ADQC', init_param=old_param, data=data, nn_para=nn_para)
     new_qc_path = data_path + '/qc_param_sample_{}_evol_{}.pt'.format(init_train_para['number'], evol_para['evol_num'])
     
-    tc.save(qc.state_dict(), new_qc_path)
+    # tc.save(qc.state_dict(), new_qc_path)
     # for key, value in results.items():
     #     results[key] = value.cpu()
     # np.save(path+'/adqc_result_sample_{:d}_evol_{:d}'.format(args.sample_num, args.evol_num), results_adqc)
