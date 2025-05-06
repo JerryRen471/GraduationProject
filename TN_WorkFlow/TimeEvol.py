@@ -255,7 +255,7 @@ def random_circuit(states, para=None):
     list_states.append(states)
     return states
 
-def main(model_name:str, model_para:dict, init_states:tc.Tensor, evol_para:dict, return_mat:bool=False):
+def main(model_name:str, model_para:dict, init_states:tt_pack, evol_para:dict, return_mat:bool=False):
     """
     Perform time evolution of quantum states.
 

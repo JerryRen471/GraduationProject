@@ -322,39 +322,22 @@ def train(qc, data:dict, para:dict):
         fide_sr = fide.abs()
         train_fide_tmp += fide_sr
 
-        # for n, (samples, lbs) in enumerate(trainloader):
-        #     psi0 = samples
-        #     for _ in range(para['recurrent_time']):
-        #         psi0 = qc(psi0)
-        #     psi1 = psi0
-        #     loss = loss_fun(psi1, lbs)
-        #     # print(loss.requires_grad)
-        #     loss.backward()
-        #     optimizer.step()
-        #     optimizer.zero_grad()
-        #     loss_tmp += loss.item()
-        #     fide = fidelity(psi1, lbs)
-        #     fide_sr = fide.abs()
-        #     train_fide_tmp += fide_sr
-        #     train_batches += 1
-
         if (t+1) % para['print_time'] == 0:
             loss_train_rec.append(loss_tmp / train_batches)
             train_fide.append(train_fide_tmp.cpu().detach().numpy() / train_batches)
             loss_tmp = 0.0
             test_fide_tmp = 0.0
             with tc.no_grad():
-                for n, (samples, lbs) in enumerate(testloader):
-                    psi0 = samples
-                    for _ in range(para['recurrent_time']):
-                        psi0 = qc(psi0)
-                    psi1 = psi0
-                    loss = loss_fun(psi1, lbs)
-                    loss_tmp += loss.item()
-                    fide = fidelity(psi1, lbs)
-                    fide_sr = fide.abs()
-                    test_fide_tmp += fide_sr
-                    test_batches += 1
+                psi0 = test_set
+                for _ in range(para['recurrent_time']):
+                    psi0 = qc(psi0)
+                psi1 = psi0
+                loss = loss_fun(psi1, test_set)
+                loss_tmp += loss.item()
+                fide = fidelity(psi1, test_set)
+                fide_sr = fide.abs()
+                test_fide_tmp += fide_sr
+                test_batches += 1
             loss_test_rec.append(loss_tmp / test_batches)
             test_fide.append(test_fide_tmp.cpu().detach().numpy() / test_batches)
             print('Epoch %i: train loss %g, test loss %g; train fidelity %g, test fidelity %g' %
