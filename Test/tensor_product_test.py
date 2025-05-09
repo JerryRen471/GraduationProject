@@ -1,5 +1,7 @@
 import numpy as np
 from scipy.linalg import block_diag
+import matplotlib.pyplot as plt
+import seaborn as sns
 
 def get_swap_gate():
     """Returns the 2x2 Swap gate matrix."""
@@ -149,6 +151,50 @@ def character_table_S3():
         [2, 0, -1]   # 2D representation
     ])
 
+def verify_projection_operator(P, representation_matrices, name="Projection Operator"):
+    """
+    Verifies that a projection operator P correctly maps vectors onto subspaces
+    that transform according to a specific irrep.
+    
+    Args:
+        P (numpy.ndarray): The projection operator
+        representation_matrices (list): List of matrices forming the representation
+        name (str): Name of the projection operator for debugging
+    
+    Returns:
+        bool: True if P is a valid projection operator
+    """
+    # Check if P^2 = P (idempotency)
+    P_squared = P @ P
+    max_diff = np.max(np.abs(P_squared - P))
+    print(f"{name} P^2 = P check: max difference = {max_diff}")
+    
+    # Check if P is Hermitian (P = P^†)
+    P_hermitian = np.conjugate(P.T)
+    max_diff_hermitian = np.max(np.abs(P - P_hermitian))
+    print(f"{name} Hermitian check: max difference = {max_diff_hermitian}")
+    
+    # Check if P commutes with all representation matrices (invariance)
+    max_commutator = 0
+    for i, D_g in enumerate(representation_matrices):
+        commutator = D_g @ P - P @ D_g
+        max_commutator = max(max_commutator, np.max(np.abs(commutator)))
+    print(f"{name} Commutator check: max value = {max_commutator}")
+    
+    # Check eigenvalues
+    eigvals, _ = np.linalg.eig(P)
+    print(f"{name} eigenvalues: {eigvals[:5]}...")
+    
+    # Count eigenvalues close to 0 and 1
+    close_to_zero = np.sum(np.abs(eigvals) < 1e-6)
+    close_to_one = np.sum(np.abs(eigvals - 1) < 1e-6)
+    print(f"{name} eigenvalues close to 0: {close_to_zero}, close to 1: {close_to_one}")
+    
+    # Return True if all checks pass
+    return (max_diff < 1e-6 and 
+            max_diff_hermitian < 1e-6 and 
+            max_commutator < 1e-6)
+
 def find_similarity_transform(representation_matrices, multiplicities):
     """
     Finds a similarity transform that brings a representation to block diagonal form.
@@ -163,50 +209,81 @@ def find_similarity_transform(representation_matrices, multiplicities):
     # Get the dimension of the representation
     dim = representation_matrices[0].shape[0]
     
+    # Debug: Print the dimension and multiplicities
+    print(f"Dimension: {dim}, Multiplicities: {multiplicities}")
+    
     # Construct the projection operators for each irrep
     # For S3, we have 3 irreps: trivial (1D), sign (1D), and 2D
     projection_operators = []
     
+    # Get the character table of S3
+    char_table = character_table_S3()
+    
+    # Map the 6 group elements to their 3 conjugacy classes
+    # Identity -> class 0
+    # (12), (23), (13) -> class 1
+    # (123), (132) -> class 2
+    class_indices = np.array([0, 1, 1, 1, 2, 2])
+    
     # Trivial representation (1D)
     if multiplicities[0] > 0:
         # Projection operator for trivial irrep
-        P_triv = np.zeros((dim, dim))
-        for matrix in representation_matrices:
+        P_triv = np.zeros((dim, dim), dtype=complex)
+        # Character of trivial irrep is 1 for all elements
+        for i, matrix in enumerate(representation_matrices):
             P_triv += matrix
         P_triv /= 6  # |G| = 6 for S3
         projection_operators.append((P_triv, multiplicities[0]))
+        print(f"Trivial projection operator shape: {P_triv.shape}")
+        verify_projection_operator(P_triv, representation_matrices, "Trivial")
     
     # Sign representation (1D)
     if multiplicities[1] > 0:
         # Projection operator for sign irrep
-        P_sign = np.zeros((dim, dim))
-        # Identity and 3-cycles have character 1, 2-cycles have character -1
+        P_sign = np.zeros((dim, dim), dtype=complex)
+        # Character of sign irrep is 1 for identity and 3-cycles, -1 for 2-cycles
         for i, matrix in enumerate(representation_matrices):
-            if i == 0 or i == 3:  # Identity or 3-cycle
+            if class_indices[i] == 0 or class_indices[i] == 2:  # Identity or 3-cycle
                 P_sign += matrix
             else:  # 2-cycles
                 P_sign -= matrix
         P_sign /= 6
         projection_operators.append((P_sign, multiplicities[1]))
+        print(f"Sign projection operator shape: {P_sign.shape}")
+        verify_projection_operator(P_sign, representation_matrices, "Sign")
     
     # 2D representation
     if multiplicities[2] > 0:
         # Projection operator for 2D irrep
-        P_2d = np.zeros((dim, dim))
-        # Identity has character 2, 2-cycles have character 0, 3-cycles have character -1
+        P_2d = np.zeros((dim, dim), dtype=complex)
+        # Character of 2D irrep is 2 for identity, 0 for 2-cycles, -1 for 3-cycles
         for i, matrix in enumerate(representation_matrices):
-            if i == 0:  # Identity
+            if class_indices[i] == 0:  # Identity
                 P_2d += 2 * matrix
-            elif i == 3:  # 3-cycle
+            elif class_indices[i] == 2:  # 3-cycles
                 P_2d -= matrix
         P_2d /= 6
         projection_operators.append((P_2d, multiplicities[2]))
+        print(f"2D projection operator shape: {P_2d.shape}")
+        verify_projection_operator(P_2d, representation_matrices, "2D")
+    
+    # Check orthogonality of projection operators
+    if len(projection_operators) > 1:
+        print("\nChecking orthogonality of projection operators:")
+        for i, (P1, _) in enumerate(projection_operators):
+            for j, (P2, _) in enumerate(projection_operators):
+                if i < j:  # Only check each pair once
+                    product = P1 @ P2
+                    max_value = np.max(np.abs(product))
+                    print(f"P{i+1} @ P{j+1} max value: {max_value}")
     
     # Find eigenvectors of projection operators
     # These eigenvectors form a basis for the invariant subspaces
     basis_vectors = []
     
-    for P, mult in projection_operators:
+    for i, (P, mult) in enumerate(projection_operators):
+        print(f"\nProcessing projection operator {i+1} with multiplicity {mult}")
+        
         # Find eigenvalues and eigenvectors
         eigvals, eigvecs = np.linalg.eig(P)
         
@@ -215,32 +292,39 @@ def find_similarity_transform(representation_matrices, multiplicities):
         eigvals = eigvals[idx]
         eigvecs = eigvecs[:, idx]
         
+        print(f"Eigenvalues: {eigvals[:5]}...")
+        
         # Select eigenvectors with eigenvalue close to 1
         # These span the invariant subspace
         selected = 0
-        for i, val in enumerate(eigvals):
-            if np.abs(val - 1) < 1e-10 and selected < mult:
+        for j, val in enumerate(eigvals):
+            if np.abs(val - 1) < 1e-6 and selected < mult:  # Increased tolerance
                 # Ensure the vector is normalized
-                vec = eigvecs[:, i]
+                vec = eigvecs[:, j]
                 vec = vec / np.linalg.norm(vec)
                 basis_vectors.append(vec)
                 selected += 1
+                print(f"Selected eigenvector {selected} with eigenvalue {val}")
         
         # If we didn't find enough eigenvectors with eigenvalue 1,
         # take the eigenvectors with largest eigenvalues
         while selected < mult:
-            for i, val in enumerate(eigvals):
-                if np.abs(val - 1) >= 1e-10 and selected < mult:
-                    vec = eigvecs[:, i]
+            for j, val in enumerate(eigvals):
+                if np.abs(val - 1) >= 1e-6 and selected < mult:
+                    vec = eigvecs[:, j]
                     vec = vec / np.linalg.norm(vec)
                     basis_vectors.append(vec)
                     selected += 1
+                    print(f"Selected fallback eigenvector {selected} with eigenvalue {val}")
     
     # Convert basis vectors to a matrix
     P = np.column_stack(basis_vectors)
+    print(f"\nSimilarity transform P shape: {P.shape}")
     
     # Ensure P is invertible by adding linearly independent vectors if needed
     rank = np.linalg.matrix_rank(P)
+    print(f"Initial rank of P: {rank}")
+    
     if rank < dim:
         # Add standard basis vectors that are linearly independent with current basis
         remaining = dim - rank
@@ -254,10 +338,17 @@ def find_similarity_transform(representation_matrices, multiplicities):
                 P = temp_P
                 rank += 1
                 remaining -= 1
+                print(f"Added standard basis vector {i}, new rank: {rank}")
     
     # Ensure P is invertible
     if np.linalg.matrix_rank(P) < dim:
         raise ValueError("Could not construct an invertible similarity transform")
+    
+    # Verify that P^(-1)AP is block diagonal for the first matrix
+    P_inv = np.linalg.inv(P)
+    transformed = P_inv @ representation_matrices[0] @ P
+    print("\nTransformed first matrix:")
+    print(transformed)
     
     return P
 
@@ -276,9 +367,11 @@ def reduce_representation(representation_matrices):
     
     # Calculate the character of the representation
     character = np.array([np.trace(matrix) for matrix in representation_matrices])
+    print(f"Character: {character}")
     
     # Get the character table of S3
     char_table = character_table_S3()
+    print(f"Character table:\n{char_table}")
     
     # Calculate the multiplicities of each irreducible representation
     # For S3, we have 3 irreps: trivial (1D), sign (1D), and 2D
@@ -309,6 +402,7 @@ def reduce_representation(representation_matrices):
     
     # Round to nearest integer (should be integers for finite groups)
     multiplicities = np.round(multiplicities).astype(int)
+    print(f"Multiplicities: {multiplicities}")
     
     # Construct the block diagonal form
     blocks = []
@@ -322,11 +416,40 @@ def reduce_representation(representation_matrices):
                 blocks.extend([np.array([[1, 0], [0, 1]]) for _ in range(mult)])
     
     block_diagonal = block_diag(*blocks)
+    print(f"Block diagonal shape: {block_diagonal.shape}")
     
     # Find the similarity transform
     P = find_similarity_transform(representation_matrices, multiplicities)
     
     return block_diagonal, multiplicities, P
+
+def visualize_matrix(matrix, title=None, cmap='viridis', annotate=True):
+    """
+    Visualizes a matrix using a heatmap.
+    
+    Args:
+        matrix (numpy.ndarray): The matrix to visualize
+        title (str, optional): Title for the plot
+        cmap (str, optional): Colormap to use
+        annotate (bool, optional): Whether to show values in cells
+    """
+    # Handle complex matrices by taking the absolute value
+    if np.iscomplexobj(matrix):
+        matrix_to_plot = np.abs(matrix)
+    else:
+        matrix_to_plot = matrix
+    
+    plt.figure(figsize=(10, 8))
+    sns.heatmap(matrix_to_plot, 
+                cmap=cmap,
+                annot=annotate,
+                fmt='.2f' if annotate else None,
+                square=True,
+                cbar=True)
+    if title:
+        plt.title(title)
+    plt.tight_layout()
+    plt.show()
 
 def test_representation_reduction():
     """
@@ -345,24 +468,32 @@ def test_representation_reduction():
         apply_swap_sequence(s_e1, 3, n_states=2),  # Identity
         apply_swap_sequence(s_o1, 3, n_states=2),  # (12)
         apply_swap_sequence(s_o2, 3, n_states=2),  # (23)
-        apply_swap_sequence(s_o3, 3, n_states=2),  # (123)
+        apply_swap_sequence(s_o3, 3, n_states=2),  # (13)
         apply_swap_sequence(s_e2, 3, n_states=2),  # (12)(23)
         apply_swap_sequence(s_e3, 3, n_states=2)   # (23)(12)
     ]
     
+    # Visualize the original matrices
+    print("Visualizing original representation matrices:")
+    for i, matrix in enumerate(rep_matrices):
+        element_names = ["Identity", "(12)", "(23)", "(123)", "(12)(23)", "(23)(12)"]
+        # visualize_matrix(matrix, title=f"Matrix {i+1}: {element_names[i]}")
+    
     # Reduce the representation
     block_diagonal, multiplicities, P = reduce_representation(rep_matrices)
     
-    print("Multiplicities of irreducible representations:")
+    print("\nMultiplicities of irreducible representations:")
     print(f"Trivial (1D): {multiplicities[0]}")
     print(f"Sign (1D): {multiplicities[1]}")
     print(f"2D: {multiplicities[2]}")
     
     print("\nBlock diagonal form:")
     print(block_diagonal)
+    visualize_matrix(block_diagonal, title="Block Diagonal Form")
     
     print("\nSimilarity transform P:")
     print(P)
+    visualize_matrix(P, title="Similarity Transform P")
     
     # Verify that P^(-1)AP is block diagonal for each matrix A
     P_inv = np.linalg.inv(P)
@@ -370,6 +501,7 @@ def test_representation_reduction():
         transformed = P_inv @ A @ P
         print(f"\nTransformed matrix {i+1}:")
         print(transformed)
+        visualize_matrix(transformed, title=f"Transformed Matrix {i+1}: {element_names[i]}")
     
     # Verify that the reduction is correct
     # The sum of squares of multiplicities times dimensions should equal the original dimension
