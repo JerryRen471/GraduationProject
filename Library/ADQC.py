@@ -171,14 +171,14 @@ class ADQC_basic(nn.Module):
     def act_nth_gate_mps(self, mps:TensorNetwork.TensorTrain, n:int):
         m_p = len(self.layers[n].pos)
         m_c = len(self.layers[n].pos_control) # control qubit not considered yet
-        mps = mps.act_two_body_gate(self.layers[n].tensor.reshape(-1, 2 ** m_p), pos=self.layers[n].pos)
+        mps = mps.act_two_body_gate(self.layers[n].tensor.reshape([2] * m_p * 2), pos=self.layers[n].pos)
         return mps
 
     def act_nth_gate_multi_mps(self, mps_pack:TensorNetwork.TensorTrain_pack, n:int):
         m_p = len(self.layers[n].pos)
         m_c = len(self.layers[n].pos_control) # control qubit not considered yet
         # new_mps = TensorNetwork.copy_from_mps_pack(mps_pack)
-        mps_pack = mps_pack.act_n_body_gate(self.layers[n].tensor.reshape(-1, 2 ** m_p), pos=self.layers[n].pos)
+        mps_pack = mps_pack.act_n_body_gate(self.layers[n].tensor.reshape([2] * m_p * 2), pos=self.layers[n].pos)
         return mps_pack
 
     def act_nth_gate_multi_states(self, states, n):
