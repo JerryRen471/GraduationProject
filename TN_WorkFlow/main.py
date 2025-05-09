@@ -7,6 +7,7 @@ import os
 import re
 import torch as tc
 from copy import deepcopy
+from Library import TEBD
 
 def search_qc(folder_path, sample_num, evol_num):
     # 使用正则表达式匹配文件名中的 evol 和 sample
@@ -59,7 +60,7 @@ def run_with_param(init_train_para, init_test_para, model_para, evol_para, nn_pa
     evol_train_para['tau'] = evol_para['tau']
     evol_train_para['print_time'] = evol_para['time_interval']
     evol_train_para['time_tot'] = evol_para['time_interval'] * evol_para['evol_num']
-    train_label = TimeEvol.main(model_name=model_name, model_para=model_para, init_states=train_init, evol_para=evol_train_para, return_mat=True)
+    train_label, obs = TimeEvol.main(model_name=model_name, model_para=model_para, init_states=train_init, evol_para=evol_train_para, return_mat=True)
     train_input = [train_init] + train_label[:-1]
 
     test_init = InitStates.main(init_test_para)
@@ -67,7 +68,7 @@ def run_with_param(init_train_para, init_test_para, model_para, evol_para, nn_pa
     # if evol_para['time_interval'] != 0:
     evol_test_para['print_time'] = evol_para['time_interval']
     evol_test_para['time_tot'] = evol_para['time_interval']
-    test_label = TimeEvol.main(model_name=model_name, model_para=model_para, init_states=test_init, evol_para=evol_test_para)
+    test_label, obs = TimeEvol.main(model_name=model_name, model_para=model_para, init_states=test_init, evol_para=evol_test_para)
     test_input = [test_init] + test_label[:-1]
 
     data = dict()
@@ -85,10 +86,10 @@ def run_with_param(init_train_para, init_test_para, model_para, evol_para, nn_pa
     old_param = None
     old_qc_path = search_qc(folder_path=data_path, evol_num=evol_para['evol_num'], sample_num=init_train_para['number'])
     if old_qc_path != None:
-        old_param = tc.load(data_path + '/' + old_qc_path)
+        old_param = tc.load(data_path + '/TN' + '/' + old_qc_path)
         # os.remove(data_path + '/' + old_qc_path)
     qc, results, nn_para = TrainModel.main(qc_type='ADQC', init_param=old_param, data=data, nn_para=nn_para)
-    new_qc_path = data_path + '/qc_param_sample_{}_evol_{}.pt'.format(init_train_para['number'], evol_para['evol_num'])
+    new_qc_path = data_path + '/TN' + '/qc_param_sample_{}_evol_{}.pt'.format(init_train_para['number'], evol_para['evol_num'])
     
     tc.save(qc.state_dict(), new_qc_path)
     for key, value in results.items():
@@ -98,7 +99,31 @@ def run_with_param(init_train_para, init_test_para, model_para, evol_para, nn_pa
     pic_path = "GraduationProject/pics" + folder
     os.makedirs(pic_path, exist_ok=True)
     
-    return_tuple = DataProcess.main(qc_mat=qc_mat.cpu(), evol_mat=evol_mat.cpu(), results=results, pic_path=pic_path, **save_para)
+    # Get gates and which_where from qc and evol_mat
+    qc_gates = [layer.tensor for layer in qc.layers]
+    qc_which_where = [[i, *layer.pos] for i, layer in enumerate(qc.layers)]
+    
+    # Generate Hamiltonian dictionary using TimeEvol's function
+    length = model_para['length']
+    gate_dict = TimeEvol.generate_gate_dict(
+        model_name=model_name,
+        model_para=model_para,
+        device=model_para.get('device', tc.device('cuda:0')),
+        dtype=model_para.get('dtype', tc.complex64)
+    )
+    
+    evol_gates = gate_dict['gate_i']
+    evol_which_where = gate_dict['pos']
+    
+    return_tuple = DataProcess.main(
+        qc_gates=qc_gates,
+        evol_gates=evol_gates,
+        qc_which_where=qc_which_where,
+        evol_which_where=evol_which_where,
+        results=results,
+        pic_path=pic_path,
+        **save_para
+    )
     return return_tuple
 
 def pack_params(

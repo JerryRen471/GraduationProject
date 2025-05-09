@@ -1502,9 +1502,9 @@ def n_body_gate_to_mpo(gate, n:int, phydim=2, device=tc.device('cpu'), dtype=tc.
         left_gate = left_gate.reshape([phydim, left_dim, phydim, phydim**2 * left_dim])
         left_gate = left_gate.permute(dims=[1, 0, 2, 3])
         left_gate_list = left_gate_list + [left_gate]
+        print('center_gate.shape=', center_gate.shape)
         center_gate = center_gate.permute([1, 0, 3, 2, 4, 5])
         center_gate = center_gate.reshape([phydim**2 * left_dim, phydim, phydim, right_dim])
-        # print(center_gate.shape)
     gate_list = left_gate_list + [center_gate] + right_gate_list
     return gate_list
 

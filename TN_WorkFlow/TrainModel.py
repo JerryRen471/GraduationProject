@@ -302,44 +302,35 @@ def train(qc, data:dict, para:dict):
     loss_fun = choose_loss(para['loss_type'])
 
     for t in range(para['it_time']):
-        loss_tmp = 0.0
-        train_fide_tmp = 0.0
-        train_batches = 0
-        test_batches = 0
-        # print(t)
-        ############ With No Batch ############
+        # Training step
         psi0 = train_set
         for _ in range(para['recurrent_time']):
             psi0 = qc(psi0)
         psi1 = psi0
         loss = loss_fun(psi1, train_lbs)
-        # print(loss.requires_grad)
-        loss.backward()
+        loss.backward(retain_graph=False)  # Don't retain graph since we don't need it
         optimizer.step()
         optimizer.zero_grad()
-        loss_tmp += loss.item()
+        
         fide = fidelity(psi1, train_lbs)
         fide_sr = fide.abs()
-        train_fide_tmp += fide_sr
 
         if (t+1) % para['print_time'] == 0:
-            loss_train_rec.append(loss_tmp / train_batches)
-            train_fide.append(train_fide_tmp.cpu().detach().numpy() / train_batches)
-            loss_tmp = 0.0
-            test_fide_tmp = 0.0
+            loss_train_rec.append(loss.item())
+            train_fide.append(fide_sr.cpu().detach().numpy())
+            
+            # Evaluation step
             with tc.no_grad():
                 psi0 = test_set
                 for _ in range(para['recurrent_time']):
                     psi0 = qc(psi0)
                 psi1 = psi0
-                loss = loss_fun(psi1, test_set)
-                loss_tmp += loss.item()
-                fide = fidelity(psi1, test_set)
+                loss = loss_fun(psi1, test_lbs)
+                fide = fidelity(psi1, test_lbs)
                 fide_sr = fide.abs()
-                test_fide_tmp += fide_sr
-                test_batches += 1
-            loss_test_rec.append(loss_tmp / test_batches)
-            test_fide.append(test_fide_tmp.cpu().detach().numpy() / test_batches)
+                
+            loss_test_rec.append(loss.item())
+            test_fide.append(fide_sr.cpu().detach().numpy())
             print('Epoch %i: train loss %g, test loss %g; train fidelity %g, test fidelity %g' %
                 (t+1, loss_train_rec[-1], loss_test_rec[-1], train_fide[-1], test_fide[-1]))
 

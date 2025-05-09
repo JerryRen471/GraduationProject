@@ -6,8 +6,9 @@ from copy import deepcopy
 
 from matplotlib import pyplot as plt
 import pandas as pd
+from Library import TEBD
 import Library.TensorNetwork as TN
-from Library.TensorNetwork import TensorTrain, inner_mps, multi_mags_from_mps, inner_product, rand_mps_pack
+from Library.TensorNetwork import TensorTrain, inner_mps_pack, multi_mags_from_mps_pack, rand_mps_pack
 from Library.PhysModule import spin_operators
 
 def merge_TN_pack(TN_pack_list):
@@ -42,7 +43,7 @@ def cal_gate_fidelity(E:tc.Tensor, U:tc.Tensor):
     gate_fidelity = 1/(n*(n+1))*(n + tc.abs(trace)**2)
     return gate_fidelity
 
-def cal_gate_fidelity_from_mpo(qc_gates, evol_gates, which_where, num_basis=10):
+def cal_gate_fidelity_from_mpo(qc_gates, evol_gates, qc_which_where, evol_which_where, num_basis=10):
     """
     Calculate gate fidelity between two quantum circuits represented as gate lists
     using basis states.
@@ -50,8 +51,10 @@ def cal_gate_fidelity_from_mpo(qc_gates, evol_gates, which_where, num_basis=10):
     Args:
         qc_gates: List of gates representing the learned quantum circuit
         evol_gates: List of gates representing the target evolution
-        which_where: List specifying which gates act on which spins
-                    Format: [[which_gate, spin1, spin2, ...], ...]
+        qc_which_where: List specifying which gates act on which spins for quantum circuit
+                       Format: [[which_gate, spin1, spin2, ...], ...]
+        evol_which_where: List specifying which gates act on which spins for evolution
+                         Format: [[which_gate, spin1, spin2, ...], ...]
         num_basis: Number of basis states to use
     
     Returns:
@@ -61,8 +64,11 @@ def cal_gate_fidelity_from_mpo(qc_gates, evol_gates, which_where, num_basis=10):
     device = qc_gates[0].device
     dtype = qc_gates[0].dtype
     
-    # Determine the number of qubits from the which_where list
-    n_qubits = max([max(pos[1:]) for pos in which_where]) + 1
+    # Determine the number of qubits from both which_where lists
+    n_qubits = max(
+        max([max(pos[1:]) for pos in qc_which_where]) + 1,
+        max([max(pos[1:]) for pos in evol_which_where]) + 1
+    )
     
     # Create computational basis states
     basis_states = []
@@ -77,14 +83,14 @@ def cal_gate_fidelity_from_mpo(qc_gates, evol_gates, which_where, num_basis=10):
     for state in basis_states:
         # Apply learned circuit
         qc_state = deepcopy(state)
-        for n in range(len(which_where)):
-            qc_state.act_n_body_gate(qc_gates[which_where[n][0]], which_where[n][1:])
+        for n in range(len(qc_which_where)):
+            qc_state.act_n_body_gate(qc_gates[qc_which_where[n][0]], qc_which_where[n][1:])
         qc_outputs.append(qc_state)
         
         # Apply target evolution
         evol_state = deepcopy(state)
-        for n in range(len(which_where)):
-            evol_state.act_n_body_gate(evol_gates[which_where[n][0]], which_where[n][1:])
+        for n in range(len(evol_which_where)):
+            evol_state.act_n_body_gate(evol_gates[evol_which_where[n][0]], evol_which_where[n][1:])
         evol_outputs.append(evol_state)
     
     # Calculate overlaps between outputs
@@ -119,36 +125,55 @@ def cal_similarity(E:tc.Tensor, U:tc.Tensor):
     s = 1 - a/b
     return s
 
-def cal_similarity_from_mpo(qc_mpo, evol_mpo, num_basis=10):
+def cal_similarity_from_mpo(qc_gates, evol_gates, qc_which_where, evol_which_where, num_basis=10):
     """
     Calculate similarity between two MPO representations of quantum circuits
     using basis states.
     
     Args:
-        qc_mpo: TensorTrain representing the learned quantum circuit
-        evol_mpo: TensorTrain representing the target evolution
+        qc_gates: List of gates representing the learned quantum circuit
+        evol_gates: List of gates representing the target evolution
+        qc_which_where: List specifying which gates act on which spins for quantum circuit
+                       Format: [[which_gate, spin1, spin2, ...], ...]
+        evol_which_where: List specifying which gates act on which spins for evolution
+                         Format: [[which_gate, spin1, spin2, ...], ...]
         num_basis: Number of basis states to use
     
     Returns:
         Similarity measure
     """
-    n_qubits = qc_mpo.length
-    device = qc_mpo.device
-    dtype = qc_mpo.dtype
+    # Get device and dtype from the first gate
+    device = qc_gates[0].device
+    dtype = qc_gates[0].dtype
+    
+    # Determine the number of qubits from both which_where lists
+    n_qubits = max(
+        max([max(pos[1:]) for pos in qc_which_where]) + 1,
+        max([max(pos[1:]) for pos in evol_which_where]) + 1
+    )
     
     # Create computational basis states
     basis_states = []
     for i in range(min(num_basis, 2**n_qubits)):
         # Create basis state
-        basis_state = TN.rand_mps(1, n_qubits, qc_mpo.chi, device=device, dtype=dtype)
+        basis_state = TN.rand_mps(1, n_qubits, qc_gates[0].shape[0], device=device, dtype=dtype)
         basis_states.append(basis_state)
     
     # Apply both circuits to the basis states
     qc_outputs = []
     evol_outputs = []
     for state in basis_states:
-        qc_outputs.append(qc_mpo(state))
-        evol_outputs.append(evol_mpo(state))
+        # Apply quantum circuit
+        qc_state = deepcopy(state)
+        for n in range(len(qc_which_where)):
+            qc_state.act_n_body_gate(qc_gates[qc_which_where[n][0]], qc_which_where[n][1:])
+        qc_outputs.append(qc_state)
+        
+        # Apply evolution
+        evol_state = deepcopy(state)
+        for n in range(len(evol_which_where)):
+            evol_state.act_n_body_gate(evol_gates[evol_which_where[n][0]], evol_which_where[n][1:])
+        evol_outputs.append(evol_state)
     
     # Calculate differences between outputs
     differences = []
@@ -196,38 +221,60 @@ def cal_spectrum(mat:tc.Tensor):
     energy, ind = tc.sort(energy)
     return energy
 
-def cal_spectrum_from_mpo(mpo, num_basis=10, time_interval=1.0):
+def cal_spectrum_from_mpo(qc_gates, evol_gates, qc_which_where, evol_which_where, num_basis=10, time_interval=1.0):
     """
     Estimate the spectrum of an MPO operator using basis states.
     
     Args:
-        mpo: TensorTrain representing the operator
+        qc_gates: List of gates representing the learned quantum circuit
+        evol_gates: List of gates representing the target evolution
+        qc_which_where: List specifying which gates act on which spins for quantum circuit
+                       Format: [[which_gate, spin1, spin2, ...], ...]
+        evol_which_where: List specifying which gates act on which spins for evolution
+                         Format: [[which_gate, spin1, spin2, ...], ...]
         num_basis: Number of basis states to use
         time_interval: Time interval for the evolution
     
     Returns:
         Estimated energy spectrum
     """
-    n_qubits = mpo.length
-    device = mpo.device
-    dtype = mpo.dtype
+    # Get device and dtype from the first gate
+    device = qc_gates[0].device
+    dtype = qc_gates[0].dtype
+    
+    # Determine the number of qubits from both which_where lists
+    n_qubits = max(
+        max([max(pos[1:]) for pos in qc_which_where]) + 1,
+        max([max(pos[1:]) for pos in evol_which_where]) + 1
+    )
     
     # Create computational basis states
     basis_states = []
     for i in range(min(num_basis, 2**n_qubits)):
         # Create basis state
-        basis_state = TN.rand_mps(1, n_qubits, mpo.chi, device=device, dtype=dtype)
+        basis_state = TN.rand_mps(1, n_qubits, qc_gates[0].shape[0], device=device, dtype=dtype)
         basis_states.append(basis_state)
     
-    # Apply the operator to the basis states
-    outputs = []
+    # Apply both circuits to the basis states
+    qc_outputs = []
+    evol_outputs = []
     for state in basis_states:
-        outputs.append(mpo(state))
+        # Apply quantum circuit
+        qc_state = deepcopy(state)
+        for n in range(len(qc_which_where)):
+            qc_state.act_n_body_gate(qc_gates[qc_which_where[n][0]], qc_which_where[n][1:])
+        qc_outputs.append(qc_state)
+        
+        # Apply evolution
+        evol_state = deepcopy(state)
+        for n in range(len(evol_which_where)):
+            evol_state.act_n_body_gate(evol_gates[evol_which_where[n][0]], evol_which_where[n][1:])
+        evol_outputs.append(evol_state)
     
     # Calculate overlaps between input and output states
     overlaps = []
     for i in range(len(basis_states)):
-        overlap = inner_product(basis_states[i], outputs[i])
+        overlap = inner_mps_pack(basis_states[i], qc_outputs[i])
         overlaps.append(overlap.item())
     
     # Convert overlaps to energies
@@ -272,7 +319,7 @@ def cal_hamiltonian_from_mpo(mpo, num_basis=10, time_interval=1.0):
     for i in range(basis_size):
         for j in range(basis_size):
             # Calculate matrix element <i|H|j>
-            overlap = inner_product(basis_states[i], outputs[j])
+            overlap = inner_mps_pack(basis_states[i], outputs[j])
             H[i, j] = overlap.item() / time_interval
     
     # Make the matrix Hermitian
@@ -350,8 +397,8 @@ def cal_mag_evolution(qc_tn, evol_tn, initial_state, time_steps=10, time_interva
     evol_state = deepcopy(initial_state)
     
     # Calculate initial magnetizations
-    qc_mags.append(multi_mags_from_mps(qc_state, spins))
-    evol_mags.append(multi_mags_from_mps(evol_state, spins))
+    qc_mags.append(multi_mags_from_mps_pack(qc_state, spins))
+    evol_mags.append(multi_mags_from_mps_pack(evol_state, spins))
     time_points.append(0.0)
     
     # Evolve the states for the specified number of time steps
@@ -365,8 +412,8 @@ def cal_mag_evolution(qc_tn, evol_tn, initial_state, time_steps=10, time_interva
             evol_state.act_n_body_gate(evol_tn.gates[evol_tn.which_where[n][0]], evol_tn.which_where[n][1:])
         
         # Calculate magnetizations
-        qc_mags.append(multi_mags_from_mps(qc_state, spins))
-        evol_mags.append(multi_mags_from_mps(evol_state, spins))
+        qc_mags.append(multi_mags_from_mps_pack(qc_state, spins))
+        evol_mags.append(multi_mags_from_mps_pack(evol_state, spins))
         time_points.append(t * time_interval)
     
     # Convert to numpy arrays for easier plotting
@@ -434,8 +481,10 @@ def main(
     Process and analyze quantum circuit data, supporting both tensor network and matrix representations.
     
     Args:
-        qc_tn: TensorTrain representing the learned quantum circuit
-        evol_tn: TensorTrain representing the target evolution
+        qc_tn: Dictionary containing gates and which_where for the learned quantum circuit
+               Format: {'gates': list of gates, 'which_where': list of positions}
+        evol_tn: Dictionary containing gates and which_where for the target evolution
+                Format: {'gates': list of gates, 'which_where': list of positions}
         qc_mat: Matrix representation of the learned quantum circuit (if available)
         evol_mat: Matrix representation of the target evolution (if available)
         results: Dictionary containing training results
@@ -483,8 +532,8 @@ def main(
         data['train_fide'] = [float(train_fide[-1])]
         data['test_fide'] = [float(test_fide[-1])]
     
-    # Initialize return list
-    return_list = []
+    # Initialize return dictionary
+    return_dict = {}
     
     # Calculate metrics based on available representations
     if qc_tn is not None and evol_tn is not None:
@@ -492,22 +541,37 @@ def main(
         print("Using tensor network representation for analysis...")
         
         # Calculate gate fidelity
-        gate_fidelity = cal_gate_fidelity_from_mpo(qc_tn.gates, evol_tn.gates, qc_tn.which_where, num_basis=10)
+        gate_fidelity = cal_gate_fidelity_from_mpo(
+            qc_gates=qc_tn['gates'],
+            evol_gates=evol_tn['gates'],
+            qc_which_where=qc_tn['which_where'],
+            evol_which_where=evol_tn['which_where'],
+            num_basis=10
+        )
         data['gate_fidelity'] = [float(gate_fidelity)]
-        return_list.append(gate_fidelity)
+        return_dict['gate_fidelity'] = gate_fidelity
         print(f"Gate fidelity: {gate_fidelity:.6f}")
         
         # Calculate similarity
-        similarity = cal_similarity_from_mpo(qc_tn, evol_tn)
+        similarity = cal_similarity_from_mpo(
+            qc_gates=qc_tn['gates'],
+            evol_gates=evol_tn['gates'],
+            qc_which_where=qc_tn['which_where'],
+            evol_which_where=evol_tn['which_where'],
+            num_basis=10
+        )
         data['similarity'] = [float(similarity)]
-        return_list.append(similarity)
+        return_dict['similarity'] = similarity
         print(f"Similarity: {similarity:.6f}")
         
         # Calculate magnetization evolution if requested
         if para.get('calc_mag_evolution', False):
             # Create an initial state
-            n_qubits = qc_tn.length
-            initial_state = rand_mps_pack(1, n_qubits, chi=10, device=qc_tn.device, dtype=qc_tn.dtype)
+            n_qubits = max(
+                max([max(pos[1:]) for pos in qc_tn['which_where']]) + 1,
+                max([max(pos[1:]) for pos in evol_tn['which_where']]) + 1
+            )
+            initial_state = rand_mps_pack(1, n_qubits, chi=10, device=qc_tn['gates'][0].device, dtype=qc_tn['gates'][0].dtype)
             
             # Calculate magnetization evolution
             time_steps = para.get('time_steps', 10)
@@ -529,7 +593,7 @@ def main(
             # Add average magnetization difference to data
             avg_mag_diff = np.mean(mag_diffs)
             data['avg_mag_diff'] = [float(avg_mag_diff)]
-            return_list.append(avg_mag_diff)
+            return_dict['avg_mag_diff'] = avg_mag_diff
             print(f"Average magnetization difference: {avg_mag_diff:.6f}")
         
         # Calculate spectrum if time interval is provided
@@ -537,13 +601,25 @@ def main(
             time_interval = para['time_interval']
             
             # Calculate energy spectra
-            qc_energy = cal_spectrum_from_mpo(qc_tn, time_interval=time_interval)
-            evol_energy = cal_spectrum_from_mpo(evol_tn, time_interval=time_interval)
+            qc_energy = cal_spectrum_from_mpo(
+                qc_gates=qc_tn['gates'],
+                evol_gates=evol_tn['gates'],
+                qc_which_where=qc_tn['which_where'],
+                evol_which_where=evol_tn['which_where'],
+                time_interval=time_interval
+            )
+            evol_energy = cal_spectrum_from_mpo(
+                qc_gates=evol_tn['gates'],
+                evol_gates=qc_tn['gates'],
+                qc_which_where=evol_tn['which_where'],
+                evol_which_where=qc_tn['which_where'],
+                time_interval=time_interval
+            )
             
             # Calculate spectrum difference
             spectrum_diff = tc.var(tc.tensor(qc_energy - evol_energy))
             data['spectrum_diff'] = [float(spectrum_diff)]
-            return_list.append(spectrum_diff)
+            return_dict['spectrum_diff'] = spectrum_diff
             print(f"Spectrum difference: {spectrum_diff:.6f}")
             
             # Calculate Hamiltonians
@@ -582,43 +658,41 @@ def main(
             
             H_diff = np.mean(abs_diff)
             data['H_diff'] = [float(H_diff)]
-            return_list.append(H_diff)
+            return_dict['H_diff'] = H_diff
             print(f"Hamiltonian difference: {H_diff:.6f}")
             
             # Calculate magnetization differences
-            op = spin_operators('half', device=qc_tn.device)
+            op = spin_operators('half', device=qc_tn['gates'][0].device)
             spins = [op['sx'], op['sy'], op['sz']]
             
             # Create a few basis states
-            n_qubits = qc_tn.length
+            n_qubits = max(
+                max([max(pos[1:]) for pos in qc_tn['which_where']]) + 1,
+                max([max(pos[1:]) for pos in evol_tn['which_where']]) + 1
+            )
             basis_states = []
             
             # Create computational basis states
-            for i in range(min(10, 2**n_qubits)):
-                # Create basis state
-                basis_state = TN.rand_mps(1, n_qubits, qc_tn.chi, device=qc_tn.device, dtype=qc_tn.dtype)
-                basis_states.append(basis_state)
+            basis_states = TN.rand_mps_pack(number=min(10, 2**n_qubits), length=n_qubits, chi=None, phydim=2, device=qc_tn['gates'][0].device, dtype=qc_tn['gates'][0].dtype)
             
             # Calculate magnetization differences
             mag_diffs = []
             
-            for state in basis_states:
-                # Apply both circuits
-                qc_output = qc_tn(state)
-                evol_output = evol_tn(state)
-                
-                # Calculate magnetization
-                qc_mags = multi_mags_from_mps(qc_output, spins)
-                evol_mags = multi_mags_from_mps(evol_output, spins)
-                
-                # Calculate difference
-                mag_diff = tc.norm(qc_mags - evol_mags).item()
-                mag_diffs.append(mag_diff)
+            # Apply both circuits
+            test_tau = 0.02
+            test_time_tot = 1
+            test_print_time = 0.02
+            qc_fin, qc_mags = TEBD.TEBD(gate_dict=qc_tn['gates'], tau=test_tau, time_tot=test_time_tot, print_time=test_print_time, init_mps=basis_states, obs=spins)
+            evol_fin, evol_mags = TEBD.TEBD(gate_dict=evol_tn['gates'], tau=test_tau, time_tot=test_time_tot, print_time=test_print_time, init_mps=basis_states, obs=spins)
+            
+            # Calculate difference
+            mag_diff = tc.norm(qc_mags - evol_mags).item()
+            mag_diffs.append(mag_diff)
             
             # Average magnetization difference
             avg_mag_diff = np.mean(mag_diffs)
             data['mag_diff'] = [float(avg_mag_diff)]
-            return_list.append(avg_mag_diff)
+            return_dict['mag_diff'] = avg_mag_diff
             print(f"Average magnetization difference: {avg_mag_diff:.6f}")
     
     elif qc_mat is not None and evol_mat is not None:
@@ -628,13 +702,13 @@ def main(
         # Calculate gate fidelity
         gate_fidelity = cal_gate_fidelity(qc_mat, evol_mat)
         data['gate_fidelity'] = [float(gate_fidelity)]
-        return_list.append(gate_fidelity)
+        return_dict['gate_fidelity'] = gate_fidelity
         print(f"Gate fidelity: {gate_fidelity:.6f}")
         
         # Calculate similarity
         similarity = cal_similarity(qc_mat, evol_mat)
         data['similarity'] = [float(similarity)]
-        return_list.append(similarity)
+        return_dict['similarity'] = similarity
         print(f"Similarity: {similarity:.6f}")
         
         # Calculate spectrum if time interval is provided
@@ -648,7 +722,7 @@ def main(
             # Calculate spectrum difference
             spectrum_diff = tc.var(qc_energy - evol_energy)
             data['spectrum_diff'] = [float(spectrum_diff)]
-            return_list.append(spectrum_diff)
+            return_dict['spectrum_diff'] = spectrum_diff
             print(f"Spectrum difference: {spectrum_diff:.6f}")
             
             # Calculate Hamiltonians
@@ -689,11 +763,11 @@ def main(
             
             H_diff = np.mean(abs_diff)
             data['H_diff'] = [float(H_diff)]
-            return_list.append(H_diff)
+            return_dict['H_diff'] = H_diff
             print(f"Hamiltonian difference: {H_diff:.6f}")
     
     # Write data to CSV
     if csv_file_path is not None:
         write_to_csv(data, csv_file_path, subset=list(para.keys()))
     
-    return tuple(return_list)
+    return return_dict
