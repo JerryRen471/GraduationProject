@@ -662,11 +662,29 @@ class TensorNetwork_pack():
             n1_new_legs = list(i + 1 for i in range(len(n1_left_legs)))
             n2_new_legs = list(i + 1 + len(n1_left_legs) for i in range(len(n2_left_legs)))
 
-        node1_ = node1.permute(perm_1).reshape(shape_1)
-        node2_ = node2.permute(perm_2).reshape(shape_2)
-        new_node_ = tc.einsum(einsum_str, node1_, node2_)
-        new_node = new_node_.reshape(new_shape)
-        # new_node = tc.tensordot(node1, node2, dims=(n1_merge_legs, n2_merge_legs))
+        try:
+            node1 = node1.permute(perm_1).reshape(shape_1)
+            node2 = node2.permute(perm_2).reshape(shape_2)
+            new_node = tc.einsum(einsum_str, node1, node2).reshape(new_shape)
+        except Exception as e:
+            # 监测node1_和node2_的显存占用
+            def print_mem(tensor, name):
+                mem_bytes = tensor.element_size() * tensor.nelement()
+                mem_mb = mem_bytes / 1024 / 1024
+                device = "GPU" if tensor.is_cuda else "CPU"
+                print(f"[TensorNetwork] {name} {device} memory usage: {mem_mb:.2f} MB, shape: {tensor.shape}")
+            print("[TensorNetwork] RuntimeError in einsum/reshape:", str(e))
+            print("[TensorNetwork] chi is", self.chi)
+            print_mem(node1, "node1")
+            print_mem(node2, "node2")
+            # 预估new_node的shape和显存
+            est_elem = 1
+            for s in new_shape:
+                est_elem *= s
+            est_bytes = est_elem * node1.element_size()
+            est_mb = est_bytes / 1024 / 1024
+            print(f"[TensorNetwork] Estimated new_node memory usage: {est_mb:.2f} MB, shape: {new_shape}")
+            raise
         n1_map = dict(zip(n1_left_legs, n1_new_legs))
         n2_map = dict(zip(n2_left_legs, n2_new_legs))
         return new_node, n1_map, n2_map
@@ -1248,7 +1266,7 @@ class TensorTrain_pack(TensorNetwork_pack):
         self.connect([pos[0], 2], [pos[0]+1, 1])
         self.merge_nodes((pos[0], pos[0]+1), is_gate=(False, True))
         ############## NOT SUITBLE FOR MULTI-BONDS BETWEEN TWO NODES ############
-        self.permute_legs(pos[0], cycle=[2, 3, 4])
+        self.permute_legs(pos[0], cycle=[i for i in range(2, self.node_list[pos[0]].dim())])
         gate_idx = 1
         for i in range(pos[0]+1, pos[-1]):
             # print(i)
@@ -1272,12 +1290,13 @@ class TensorTrain_pack(TensorNetwork_pack):
                 self.flatten((i-1, i))
                 self.permute_legs(i, cycle=[2, 3, 4])
                 # self.permute_legs(i, cycle=[2, 3, 4, 5])
-        self.add_node(gate_list[-1].squeeze(), site=pos[-1]+1, device=self.device, dtype=self.dtype)
-        self.connect([pos[-1], -2], [pos[-1]+1, 2])
-        self.connect([pos[-1]-1, -2], [pos[-1]+1, 0])
-        self.merge_nodes((pos[-1], pos[-1]+1), is_gate=(False, True))
-        self.flatten((pos[-1]-1, pos[-1]))
-        self.permute_legs(pos[-1], cycle=[2, 3])
+        if len(pos) > 1:
+            self.add_node(gate_list[-1].squeeze(), site=pos[-1]+1, device=self.device, dtype=self.dtype)
+            self.connect([pos[-1], -2], [pos[-1]+1, 2])
+            self.connect([pos[-1]-1, -2], [pos[-1]+1, 0])
+            self.merge_nodes((pos[-1], pos[-1]+1), is_gate=(False, True))
+            self.flatten((pos[-1]-1, pos[-1]))
+            self.permute_legs(pos[-1], cycle=[2, 3])
 
         # for i in range(affected_pos[0], next_pos[0]):
         #     self.merge_nodes((i, i+1))
@@ -1395,15 +1414,14 @@ def slice_mps_pack(mps:TensorTrain_pack, section:int):
         new_mps.trunc_error = new_mps.trunc_error[:section]
     return new_mps
 
-def rand_prod_mps_pack(number, length, chi, phydim=2, device=tc.device('cpu'), dtype=tc.complex64):
-    states = [tc.rand([number, phydim], dtype=dtype, device=device) for _ in range(length)]
+def rand_prod_mps_pack(number, length, chi, phydim=2, device=tc.device('cpu'), dtype=tc.complex64, **kwargs):
+    states = [tc.rand([number, 1, phydim, 1], dtype=dtype, device=device) for _ in range(length)]
     for i in range(len(states)):
         site = states[i]
-        norm = tc.sqrt(tc.einsum('ni, ni->n', site, site.conj()))
-        site[:, 0] = site[:, 0] / norm
-        site[:, 1] = site[:, 1] / norm
+        norm = tc.sqrt(tc.einsum('naib, naib->nab', site, site.conj()))
+        site = site / norm.unsqueeze(2).broadcast_to(size=site.shape)
         states[i] = site
-    mps = TensorTrain_pack(states, length=length, phydim=phydim, center=-1, chi=chi, device=device, dtype=dtype)
+    mps = TensorTrain_pack(states, length=length, phydim=phydim, center=-1, chi=chi, device=device, dtype=dtype, initialize=False)
     return mps
 
 def rand_mps_pack(number, length, chi, phydim=2, device=tc.device('cpu'), dtype=tc.complex64):
@@ -1502,7 +1520,7 @@ def n_body_gate_to_mpo(gate, n:int, phydim=2, device=tc.device('cpu'), dtype=tc.
         left_gate = left_gate.reshape([phydim, left_dim, phydim, phydim**2 * left_dim])
         left_gate = left_gate.permute(dims=[1, 0, 2, 3])
         left_gate_list = left_gate_list + [left_gate]
-        print('center_gate.shape=', center_gate.shape)
+        # print('center_gate.shape=', center_gate.shape)
         center_gate = center_gate.permute([1, 0, 3, 2, 4, 5])
         center_gate = center_gate.reshape([phydim**2 * left_dim, phydim, phydim, right_dim])
     gate_list = left_gate_list + [center_gate] + right_gate_list
