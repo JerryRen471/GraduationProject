@@ -259,6 +259,8 @@ class ADQC_basic(nn.Module):
         self.renew_gates()
         for n in range(len(self.layers)):
             mps = self.act_nth_gate_multi_mps(mps, n)
+            if n < len(self.layers) - 1:
+                mps.move_center_to(self.layers[n+1].pos[0], if_trun=True)
         return mps
 
     def forward_tensor(self, state):
