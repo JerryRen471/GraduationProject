@@ -1,4 +1,8 @@
 **/__pycache__/
+
+# 忽略 output_PXP_tn 文件夹
+output_PXP_tn
+
 **Data/**/*.npy
 **Data/**/*.pt
 # 忽略 Data 文件夹下的所有文件
