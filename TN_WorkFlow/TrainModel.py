@@ -1,9 +1,15 @@
+from copy import deepcopy
 from math import sqrt
 from sympy import AssumptionsContext, assuming
 import torch as tc
 import numpy as np
-
 import sys
+import gc
+from memory_profiler import profile
+import psutil
+import os
+from pympler import asizeof
+
 sys.path.append('/data/home/scv7454/run/GraduationProject')
 
 import Library.BasicFun as bf
@@ -262,6 +268,71 @@ def VQC(para=None):
     qc.single_state = False  # 切换至多个态演化模式
     return qc
 
+def get_memory_usage():
+    """Get current memory usage of the process in MB"""
+    process = psutil.Process(os.getpid())
+    mem_info = process.memory_info()
+    return mem_info.rss / 1024 / 1024  # Convert to MB
+
+def get_gpu_memory_usage():
+    """Get current GPU memory usage in MB"""
+    if tc.cuda.is_available():
+        return tc.cuda.memory_allocated() / 1024 / 1024  # Convert to MB
+    return 0
+
+def get_gpu_memory_reserved():
+    """Get current GPU memory reserved in MB"""
+    if tc.cuda.is_available():
+        return tc.cuda.memory_reserved() / 1024 / 1024  # Convert to MB
+    return 0
+
+def clear_gpu_memory():
+    """Clear GPU memory cache"""
+    if tc.cuda.is_available():
+        tc.cuda.empty_cache()
+    gc.collect()
+
+def get_tensor_memory_usage(tensor):
+    """Get memory usage of a tensor in MB"""
+    if tensor is None:
+        return 0
+    if isinstance(tensor, tc.Tensor):
+        return tensor.element_size() * tensor.nelement() / 1024 / 1024  # Convert to MB
+    return 0
+
+def get_variable_memory_usage(var, unit='MB'):
+    """Get memory usage of any variable
+    
+    Args:
+        var: Any Python variable
+        unit: 'B' for bytes, 'KB' for kilobytes, 'MB' for megabytes
+        
+    Returns:
+        Memory usage in specified unit
+    """
+    if var is None:
+        return 0
+        
+    # Handle PyTorch tensors
+    if isinstance(var, tc.Tensor):
+        memory = var.element_size() * var.nelement()
+    # Handle numpy arrays
+    elif isinstance(var, np.ndarray):
+        memory = var.nbytes
+    # Handle other Python objects
+    else:
+        memory = asizeof.asizeof(var)
+    
+    # Convert to requested unit
+    if unit == 'KB':
+        return memory / 1024
+    elif unit == 'MB':
+        return memory / 1024 / 1024
+    elif unit == 'GB':
+        return memory / 1024 / 1024 / 1024
+    else:  # bytes
+        return memory
+
 def train(qc, data:dict, para:dict):
     """用data按照para的设定对qc进行训练
 
@@ -272,7 +343,7 @@ def train(qc, data:dict, para:dict):
     para0['loss_type'] = 'fidelity'  # 损失函数类型
     para0['lr'] = 2e-2  # 初始学习率
     para0['it_time'] = 1000  # 迭代次数
-    para0['print_time'] = 10  # 打印间隔
+    para0['print_time'] = 20  # 打印间隔
     para0['recurrent_time'] = 1 # 循环次数
     if para is None:
         para = para0
@@ -281,47 +352,74 @@ def train(qc, data:dict, para:dict):
 
     optimizer = Adam(qc.parameters(), lr=para['lr'])
 
-    # num_train = int(data.shape[0] * (1-para['test_ratio']))
     train_set = data['train_set']
     train_lbs = data['train_label']
     test_set = data['test_set']
     test_lbs = data['test_label']
-    # trainset, train_lbs = split_time_series(
-    #     data[:num_train], para['length'], para['device'], para['dtype'])
-    # testset, test_lbs = split_time_series(
-    #     data[num_train-para['length']:], para['length'], para['device'], para['dtype'])
-
-    # trainloader = DataLoader(TensorDataset(trainset, train_lbs), batch_size=para['batch_size'], shuffle=False)
-    # testloader = DataLoader(TensorDataset(testset, test_lbs), batch_size=para['batch_size'], shuffle=False)
 
     loss_train_rec = list()
     loss_test_rec = list()
     train_fide = list()
     test_fide = list()
+    gpu_memory_usage = list()
+    gpu_memory_reserved = list()
 
     loss_fun = choose_loss(para['loss_type'])
 
     for t in range(para['it_time']):
         # Training step
-        psi0 = train_set
+        print(f'Training step: {t}')
+        clear_gpu_memory()
+        
+        temp = get_gpu_memory_usage()
+        psi0 = deepcopy(train_set)
+        print(f'The cost of deepcopy train_set is {get_gpu_memory_usage() - temp:.2f} MB')
+        print(f'GPU Memory - Allocated: {get_gpu_memory_usage():.2f} MB, Reserved: {get_gpu_memory_reserved():.2f} MB')
         for _ in range(para['recurrent_time']):
             psi0 = qc(psi0)
         psi1 = psi0
-        loss = loss_fun(psi1, train_lbs)
-        loss.backward(retain_graph=False)  # Don't retain graph since we don't need it
+        loss = loss_fun(psi1, deepcopy(train_lbs))
+
+        print(f'-----Before Backward-----')
+        print(f'GPU Memory - Allocated: {get_gpu_memory_usage():.2f} MB, Reserved: {get_gpu_memory_reserved():.2f} MB')
+        print(f'Loss memory: {get_variable_memory_usage(loss):.2f} MB')
+        print(f'psi0 memory: {get_variable_memory_usage(psi0):.2f} MB')
+        print(f'psi1 memory: {get_variable_memory_usage(psi1):.2f} MB')
+        print(f'Optimizer memory: {get_variable_memory_usage(optimizer):.2f} MB')
+        print(f'Model memory: {get_variable_memory_usage(qc):.2f} MB')
+
+        loss.backward(retain_graph=False)
+
+        print(f'-----After Backward-----')
+        print(f'GPU Memory - Allocated: {get_gpu_memory_usage():.2f} MB, Reserved: {get_gpu_memory_reserved():.2f} MB')
+        print(f'Loss memory: {get_variable_memory_usage(loss):.2f} MB')
+        print(f'Gradients memory: {get_variable_memory_usage([p.grad for p in qc.parameters() if p.grad is not None]):.2f} MB')
+
         optimizer.step()
         optimizer.zero_grad()
-        
-        fide = fidelity(psi1, train_lbs)
-        fide_sr = fide.abs()
+        clear_gpu_memory()
 
+        print(f'-----After Update-----')
+        print(f'GPU Memory - Allocated: {get_gpu_memory_usage():.2f} MB, Reserved: {get_gpu_memory_reserved():.2f} MB')
+        gpu_memory_usage.append(get_gpu_memory_usage())
+        gpu_memory_reserved.append(get_gpu_memory_reserved())
+        
+        # with tc.no_grad():
         if (t+1) % para['print_time'] == 0:
-            loss_train_rec.append(loss.item())
-            train_fide.append(fide_sr.cpu().detach().numpy())
-            
             # Evaluation step
             with tc.no_grad():
-                psi0 = test_set
+                # Train evaluation
+                fide = fidelity(psi1, train_lbs)
+                fide_sr = fide.abs()
+                loss_train_rec.append(loss.detach().cpu().numpy())
+                train_fide.append(fide_sr.detach().cpu().numpy())
+                
+                # Clear GPU memory
+                del psi0, loss, fide, fide_sr
+                clear_gpu_memory()
+                
+                # Test evaluation
+                psi0 = deepcopy(test_set)  # Use deepcopy for TensorTrain_pack
                 for _ in range(para['recurrent_time']):
                     psi0 = qc(psi0)
                 psi1 = psi0
@@ -329,29 +427,24 @@ def train(qc, data:dict, para:dict):
                 fide = fidelity(psi1, test_lbs)
                 fide_sr = fide.abs()
                 
-            loss_test_rec.append(loss.item())
-            test_fide.append(fide_sr.cpu().detach().numpy())
-            print('Epoch %i: train loss %g, test loss %g; train fidelity %g, test fidelity %g' %
-                (t+1, loss_train_rec[-1], loss_test_rec[-1], train_fide[-1], test_fide[-1]))
+                loss_test_rec.append(loss.detach().cpu().numpy())
+                test_fide.append(fide_sr.detach().cpu().numpy())
+                
+                print('Epoch %i: train loss %g, test loss %g; train fidelity %g, test fidelity %g' %
+                    (t+1, loss_train_rec[-1], loss_test_rec[-1], train_fide[-1], test_fide[-1]))
+                
+                # Clear GPU memory again
+                del psi0, psi1, loss, fide, fide_sr
+                clear_gpu_memory()
 
     with tc.no_grad():
         results = dict()
-        # psi0 = trainset
-        # for _ in range(para['recurrent_time']):
-        #     psi0 = qc(psi0)
-        # output = psi0
-        # output = output.data.to(device=data['train_set'].device)
-        # results['train_pred'] = output
-        # psi0 = testset
-        # for _ in range(para['recurrent_time']):
-        #     psi0 = qc(psi0)
-        # output1 = psi0
-        # output1 = output1.data.to(device=data['test_set'].device)
-        # results['test_pred'] = output1
         results['train_loss'] = loss_train_rec
         results['test_loss'] = loss_test_rec
         results['train_fide'] = train_fide
         results['test_fide'] = test_fide
+        results['gpu_memory_usage'] = gpu_memory_usage
+        results['gpu_memory_reserved'] = gpu_memory_reserved
     return qc, results, para
 
 def main(qc_type:str='ADQC', init_param:dict=None, data:dict=None, nn_para:dict={}):
@@ -363,5 +456,8 @@ def main(qc_type:str='ADQC', init_param:dict=None, data:dict=None, nn_para:dict=
         raise NotImplementedError
     if init_param != None:
         qc.load_state_dict(init_param, strict=False)
+    print(f'---Before Train---')
+    print(f'GPU Memory - Allocated: {get_gpu_memory_usage():.2f} MB, Reserved: {get_gpu_memory_reserved():.2f} MB')
+    print('-'*20)
     qc, results, nn_para = train(qc, data, nn_para)
     return qc, results, nn_para
