@@ -60,7 +60,7 @@ def run_with_param(init_train_para, init_test_para, model_para, evol_para, nn_pa
     evol_train_para['tau'] = evol_para['tau']
     evol_train_para['print_time'] = evol_para['time_interval']
     evol_train_para['time_tot'] = evol_para['time_interval'] * evol_para['evol_num']
-    train_label, obs = TimeEvol.main(model_name=model_name, model_para=model_para, init_states=train_init, evol_para=evol_train_para, return_mat=True)
+    train_label, obs, gate_dict = TimeEvol.main(model_name=model_name, model_para=model_para, init_states=train_init, evol_para=evol_train_para, return_mat=True)
     train_input = [train_init] + train_label[:-1]
 
     test_init = InitStates.main(init_test_para)
@@ -68,7 +68,7 @@ def run_with_param(init_train_para, init_test_para, model_para, evol_para, nn_pa
     # if evol_para['time_interval'] != 0:
     evol_test_para['print_time'] = evol_para['time_interval']
     evol_test_para['time_tot'] = evol_para['time_interval']
-    test_label, obs = TimeEvol.main(model_name=model_name, model_para=model_para, init_states=test_init, evol_para=evol_test_para)
+    test_label, obs, gate_dict = TimeEvol.main(model_name=model_name, model_para=model_para, init_states=test_init, evol_para=evol_test_para)
     test_input = [test_init] + test_label[:-1]
 
     data = dict()
@@ -77,11 +77,17 @@ def run_with_param(init_train_para, init_test_para, model_para, evol_para, nn_pa
     data['train_label'] = DataProcess.merge_TN_pack(train_label)
     data['test_set'] = DataProcess.merge_TN_pack(test_input)
     data['test_label'] = DataProcess.merge_TN_pack(test_label)
+    for i, node in enumerate(data['train_set'].node_list):
+        print(f"[Data Set]train_set.node_list[{i}].shape = {node.shape}")
 
+    print()
+    print(f'-----Before Train-----')
+    print(f'GPU Memory - Allocated: {TrainModel.get_gpu_memory_usage():.2f} MB, Reserved: {TrainModel.get_gpu_memory_reserved():.2f} MB')
+    print(f'Data memory: {TrainModel.get_variable_memory_usage(data):.2f} MB')
     # 加载并训练神经网络
     folder = "/{model_name}/length{length}/loss_{loss}/{time_interval}/{data_type}".format(
         model_name=model_name, length=model_para['length'], loss=nn_para['loss_type'], time_interval=evol_para['time_interval'], data_type=init_train_para['type'])
-    data_path = "GraduationProject/Data" + folder
+    data_path = "Data" + folder
     os.makedirs(data_path, exist_ok=True)
     old_param = None
     old_qc_path = search_qc(folder_path=data_path, evol_num=evol_para['evol_num'], sample_num=init_train_para['number'])
@@ -89,11 +95,12 @@ def run_with_param(init_train_para, init_test_para, model_para, evol_para, nn_pa
         old_param = tc.load(data_path + '/TN' + '/' + old_qc_path)
         # os.remove(data_path + '/' + old_qc_path)
     qc, results, nn_para = TrainModel.main(qc_type='ADQC', init_param=old_param, data=data, nn_para=nn_para)
-    new_qc_path = data_path + '/TN' + '/qc_param_sample_{}_evol_{}.pt'.format(init_train_para['number'], evol_para['evol_num'])
+    new_qc_path = data_path + '/TN'
+    os.makedirs(new_qc_path, exist_ok=True)
+    tc.save(qc.state_dict(), new_qc_path+'/qc_param_sample_{}_evol_{}.pt'.format(init_train_para['number'], evol_para['evol_num']))
     
-    tc.save(qc.state_dict(), new_qc_path)
-    for key, value in results.items():
-        results[key] = value.cpu()
+    # for key, value in results.items():
+    #     results[key] = value.cpu()
     # np.save(path+'/adqc_result_sample_{:d}_evol_{:d}'.format(args.sample_num, args.evol_num), results_adqc)
 
     pic_path = "GraduationProject/pics" + folder
@@ -103,23 +110,15 @@ def run_with_param(init_train_para, init_test_para, model_para, evol_para, nn_pa
     qc_gates = [layer.tensor for layer in qc.layers]
     qc_which_where = [[i, *layer.pos] for i, layer in enumerate(qc.layers)]
     
-    # Generate Hamiltonian dictionary using TimeEvol's function
-    length = model_para['length']
-    gate_dict = TimeEvol.generate_gate_dict(
-        model_name=model_name,
-        model_para=model_para,
-        device=model_para.get('device', tc.device('cuda:0')),
-        dtype=model_para.get('dtype', tc.complex64)
-    )
-    
+    # Get gates and which_where from the gate_dict generated before
     evol_gates = gate_dict['gate_i']
-    evol_which_where = gate_dict['pos']
+    evol_which_where = []
+    for i in range(len(evol_gates)):
+        evol_which_where = evol_which_where + [[i] + pos[:] for pos in gate_dict['pos'][i]]
     
     return_tuple = DataProcess.main(
-        qc_gates=qc_gates,
-        evol_gates=evol_gates,
-        qc_which_where=qc_which_where,
-        evol_which_where=evol_which_where,
+        qc_tn={'gates':qc_gates, 'which_where':qc_which_where},
+        evol_tn={'gates':evol_gates, 'which_where':evol_which_where},
         results=results,
         pic_path=pic_path,
         **save_para
@@ -158,7 +157,7 @@ def pack_params(
         'chi': chi,
         'type': 'product',
         'length': length,
-        'number': 100, 
+        'number': 10, 
         'device': device, 
         'dtype': dtype
     }
@@ -294,6 +293,6 @@ if __name__ == "__main__":
     parser.add_argument('--sample_num', type=int, default=10)
     args = parser.parse_args()
 
-    init_train_para, init_test_para, return_model_para, evol_para, nn_para, save_para = pack_params(device=tc.device('cuda:0'), model_para=dict(), csv_file_path='/data/home/scv7454/run/GraduationProject/Data/PXP_test.csv', **vars(args))
+    init_train_para, init_test_para, return_model_para, evol_para, nn_para, save_para = pack_params(chi=16, device=tc.device('cuda:0'), model_para=dict(), csv_file_path='/data/home/scv7454/run/GraduationProject/Data/PXP_test.csv', **vars(args))
     gate_fidelity, spectrum_diff, similarity = run_with_param(init_train_para, init_test_para, return_model_para, evol_para, nn_para, save_para)
     print(gate_fidelity, spectrum_diff, similarity)

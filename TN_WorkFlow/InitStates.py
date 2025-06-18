@@ -216,7 +216,7 @@ def main(init_para:dict):
     if init_para['type'] == 'non_product':
         return states_to_mps_pack(rand_states(**init_para), **init_para)
     elif init_para['type'] == 'product':
-        return states_to_mps_pack(rand_dir_prod_states(**init_para), **init_para)
+        return TN.rand_prod_mps_pack(**init_para)
     elif init_para['type'] == 'Z2':
         return states_to_mps_pack(Z2_states(**init_para), **init_para)
     elif init_para['type'] == 'entangled':

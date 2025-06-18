@@ -1,3 +1,6 @@
+import sys
+sys.path.append('/data/home/scv7454/run/GraduationProject')
+
 import os
 import torch as tc
 import numpy as np
@@ -541,16 +544,21 @@ def main(
         print("Using tensor network representation for analysis...")
         
         # Calculate gate fidelity
-        gate_fidelity = cal_gate_fidelity_from_mpo(
-            qc_gates=qc_tn['gates'],
-            evol_gates=evol_tn['gates'],
-            qc_which_where=qc_tn['which_where'],
-            evol_which_where=evol_tn['which_where'],
-            num_basis=10
-        )
-        data['gate_fidelity'] = [float(gate_fidelity)]
-        return_dict['gate_fidelity'] = gate_fidelity
-        print(f"Gate fidelity: {gate_fidelity:.6f}")
+        try:
+            gate_fidelity = cal_gate_fidelity_from_mpo(
+                qc_gates=qc_tn['gates'],
+                evol_gates=evol_tn['gates'],
+                qc_which_where=qc_tn['which_where'],
+                evol_which_where=evol_tn['which_where'],
+                num_basis=100
+            )
+            data['gate_fidelity'] = [float(gate_fidelity)]
+            return_dict['gate_fidelity'] = gate_fidelity
+            print(f"Gate fidelity: {gate_fidelity:.6f}")
+        except Exception as e:
+            print(e)
+            print('qc_tn[which_where]', qc_tn['which_where'])
+            print('evol_tn[which_where]', evol_tn['which_where'])
         
         # Calculate similarity
         similarity = cal_similarity_from_mpo(
@@ -580,7 +588,7 @@ def main(
             
             # Plot and save the evolution
             if pic_path:
-                plot_mag_evolution(evolution_data, save_path=pic_path+'/mag_evolution_num{:d}.svg'.format(para['evol_num']))
+                plot_mag_evolution(evolution_data, save_path=pic_path+'/mag_evolution_num{:d}.pdf'.format(para['evol_num']))
             
             # Calculate average magnetization difference over time
             mag_diffs = []
@@ -597,7 +605,8 @@ def main(
             print(f"Average magnetization difference: {avg_mag_diff:.6f}")
         
         # Calculate spectrum if time interval is provided
-        if para.get('time_interval', 0) != 0:
+        if 1==0:
+        # if para.get('time_interval', 0) != 0:
             time_interval = para['time_interval']
             
             # Calculate energy spectra
@@ -673,7 +682,7 @@ def main(
             basis_states = []
             
             # Create computational basis states
-            basis_states = TN.rand_mps_pack(number=min(10, 2**n_qubits), length=n_qubits, chi=None, phydim=2, device=qc_tn['gates'][0].device, dtype=qc_tn['gates'][0].dtype)
+            basis_states = TN.rand_mps_pack(number=min(10, 2**n_qubits), length=n_qubits, chi=16, phydim=2, device=qc_tn['gates'][0].device, dtype=qc_tn['gates'][0].dtype)
             
             # Calculate magnetization differences
             mag_diffs = []

@@ -99,11 +99,11 @@ def PXP_mul_states_evol(states, para=None, obs=[]):
     para = dict(para_def, **para)
     
     # Generate Hamiltonian dictionary
-    hamilt_dict = generate_gate_dict(model_name='PXP', model_para=para, tau=para['tau'], device=para['device'], dtype=para['dtype'])
+    gate_dict = generate_gate_dict(model_name='PXP', model_para=para, tau=para['tau'], device=para['device'], dtype=para['dtype'])
     
     # Run TEBD evolution
-    evol_states, obs = TEBD(hamilt_dict, tau=para['tau'], time_tot=para['time_tot'], print_time=para['print_time'], init_mps=states, obs=obs)
-    return evol_states, obs
+    evol_states, obs = TEBD(gate_dict, tau=para['tau'], time_tot=para['time_tot'], print_time=para['print_time'], init_mps=states, obs=obs)
+    return evol_states, obs, gate_dict
 
 def Heis_mul_states_evol(states, para=None):
     pass
@@ -329,19 +329,19 @@ def main(model_name:str, model_para:dict, init_states:tt_pack, evol_para:dict, o
         return evol_states
     
     else:
-        if model_name == 'Quantum_Sun':
-            evol_states = Quantum_Sun_evol(init_states, dict(model_para, **evol_para))
-        elif model_name == 'XXZ_inhomo':
-            evol_states = XXZ_inhomo_mul_states_evol(init_states, dict(model_para, **evol_para))
-        elif model_name == 'PXP':
-            evol_states = PXP_mul_states_evol(init_states, dict(model_para, **evol_para), obs)
-        elif model_name == 'xorX':
-            evol_states = xorX_mul_states_evol(init_states, dict(model_para, **evol_para))
-        elif model_name == 'random_circuit':
-            evol_states = random_circuit(init_states, dict(model_para, **evol_para))
+        if model_name == 'PXP':
+            evol_states, obs, hamilt_dict = PXP_mul_states_evol(init_states, dict(model_para, **evol_para), obs)
+        # elif model_name == 'XXZ_inhomo':
+        #     evol_states, obs, hamilt_dict = XXZ_inhomo_mul_states_evol(init_states, dict(model_para, **evol_para))
+        # elif model_name == 'Quantum_Sun':
+        #     evol_states, obs, hamilt_dict = Quantum_Sun_evol(init_states, dict(model_para, **evol_para))
+        # elif model_name == 'xorX':
+        #     evol_states, obs, hamilt_dict = xorX_mul_states_evol(init_states, dict(model_para, **evol_para))
+        # elif model_name == 'random_circuit':
+        #     evol_states, obs, hamilt_dict = random_circuit(init_states, dict(model_para, **evol_para))
         else:
             raise ValueError
-        return evol_states
+        return evol_states, obs, hamilt_dict
     # train_label = evol_states
     # train_input = tc.cat((train_init_states.unsqueeze(1), train_evol_states[:, :-1]), dim=1)
     # train_input = tc.cat((test_init_states.unsqueeze(1), test_evol_states[:, :-1]), dim=1)
