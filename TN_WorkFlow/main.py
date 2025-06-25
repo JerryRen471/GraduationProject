@@ -1,11 +1,12 @@
 import sys
-sys.path.append('/data/home/scv7454/run/GraduationProject')
+# sys.path.append('/data/home/scv7454/run/GraduationProject')
+# sys.path.append('/data/home/scv7454/run/GraduationProject/TN_WorkFlow')
+import torch as tc
 from TN_WorkFlow import InitStates, TimeEvol, TrainModel, DataProcess
 import argparse
 import ast
 import os
 import re
-import torch as tc
 from copy import deepcopy
 from Library import TEBD
 
