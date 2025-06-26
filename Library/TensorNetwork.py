@@ -1282,7 +1282,7 @@ class TensorTrain_pack(TensorNetwork_pack):
                 pass
             elif i in delta_pos:
                 delta_dim = delta_dim_list[i]
-                delta = tc.einsum('il, jl -> ijkl', tc.eys(delta_dim, device=self.device, dtype=self.dtype), tc.eys(self.phydim, device=self.device, dtype=self.dtype))
+                delta = tc.einsum('il, jk -> ijkl', tc.eys(delta_dim, device=self.device, dtype=self.dtype), tc.eys(self.phydim, device=self.device, dtype=self.dtype))
                 self.add_node(delta, site=i+1, device=self.device, dtype=self.dtype)
                 self.connect([i, 2], [i+1, 1])
                 self.connect([i-1, -2], [i+1, 0])
