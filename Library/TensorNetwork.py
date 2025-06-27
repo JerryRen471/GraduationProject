@@ -1492,6 +1492,9 @@ def tensor2mps_pack(states:tc.Tensor, chi:int):
     mps_pack = TensorTrain_pack(tensor_packs=[states], length=length, phydim=phydim, center=-1, chi=chi, device=states.device, dtype=states.dtype, initialize=False)
 
 def n_body_gate_to_mpo(gate, n:int, phydim=2, device=tc.device('cpu'), dtype=tc.complex64):
+    '''
+    The shape of gate should be [2, 2, ..., 2, 2]
+    '''
     # n = gate.dim() // 2
     center_gate = gate.unsqueeze(0)
     center_gate = center_gate.unsqueeze(-1)
