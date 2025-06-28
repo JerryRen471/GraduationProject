@@ -13,12 +13,58 @@ def fill_seq(pos:list):
     for i in pos:
         delta_pos.remove(i)
     return delta_pos
+
 def step_function(i:int, pos:list):
     f = lambda x: 0 if x < 0 else 1
     y = 0
     for j in pos[1:]:
         y = y + f(i - j)
     return y
+
+def othogonalize_mpo(mpo:list, start:int, end:int, if_trun:bool=True, chi:int=4):
+    """
+    Othogonalize a given mpo from start to end(not include end). 
+    NOTICE: The tensor on end is not othogonal.
+
+    Args:
+        mpo: List of tensors, each tensor has the shape like [chi1, phy_dim, phy_dim, chi2]
+        start: Position to start the othogonalization process
+        end: Position to end the othogonalization process
+    
+    Returns:
+        Othogonalized mpo
+    """
+    step = 1 if start < end else -1
+    for i in range(start, end, step):
+        if step == 1:
+            mpo_i1 = mpo[i]
+            mpo_i2 = mpo[i + 1]
+        else:
+            mpo_i1 = mpo[i - 1]
+            mpo_i2 = mpo[i]
+        tmp = tc.einsum('ijkl, labc -> ijkabc', mpo_i1, mpo_i2)
+        tmp_shape = list(tmp.shape)
+        new_shape = [tmp_shape[0]*tmp_shape[1]*tmp_shape[2], tmp_shape[3]*tmp_shape[4]*tmp_shape[5]]
+        tmp = tmp.reshape(new_shape)
+        u, s, vh = tc.linalg.svd(tmp, full_matrices=False)
+        virtual_dim = u.shape[-1]
+        #truncate
+        if if_trun:
+            virtual_dim = min(chi, virtual_dim)
+            u = u[:, :virtual_dim]
+            s = s[:virtual_dim]
+            vh = vh[:virtual_dim, :]
+        if step == 1:
+            mpo_i1_new = u.reshape(tmp_shape[:3]+[virtual_dim])
+            mpo_i2_new = tc.einsum('j, jk -> jk', s, vh).reshape([virtual_dim]+tmp_shape[3:])
+            mpo[i] = mpo_i1_new
+            mpo[i + 1] = mpo_i2_new
+        else:
+            mpo_i1_new = tc.einsum('ij, j->ij', u, s).reshape(tmp_shape[:3]+[virtual_dim])
+            mpo_i2_new = vh.reshape([virtual_dim]+tmp_shape[3:])
+            mpo[i - 1] = mpo_i1_new
+            mpo[i] = mpo_i2_new
+    return mpo
 
 def process_mpo_tensors(mpo_t_list, pos, mpo, device, dtype):
     """
@@ -65,12 +111,19 @@ def process_mpo_tensors(mpo_t_list, pos, mpo, device, dtype):
 def mpo_act_gates(gates, which_where, n_qubit, mpo=None, device=tc.device('cpu'), dtype=tc.complex64):
     if mpo == None:
         mpo = list(tc.eye(2, device=device, dtype=dtype).reshape([1, 2, 2, 1]) for _ in range(n_qubit))
+    center = []
     for i_pos in which_where:
         gate = gates[i_pos[0]]
-        pos = i_pos[1:]
+        pos = list(i_pos[1:])
+        print(pos)
         mpo_t_list = n_body_gate_to_mpo(gate=gate, n=len(pos), device=device, dtype=dtype)
         # print(len(gate_list))
+        affected_pos = pos[:] + center[:]
+        affected_pos.sort()
+        mpo = othogonalize_mpo(mpo, start=affected_pos[0], end=pos[0], if_trun=True)
+        mpo = othogonalize_mpo(mpo, start=affected_pos[-1], end=pos[-1], if_trun=True)
         mpo = process_mpo_tensors(mpo_t_list, pos, mpo, device, dtype)
+        center = pos[:]
     return mpo
 
 def inverse_circuit(gates, which_where):
@@ -147,13 +200,13 @@ if __name__ == "__main__":
     h = a + a.T.conj()
     rand_gate = tc.matrix_exp(1.j * h).reshape(2,2,2,2)
     gates_1 = [tc.eye(4, dtype=tc.complex64).reshape(2,2,2,2), rand_gate]
-    which_where_1 = [(0, 1, 2), (1, 0, 1)]
+    which_where_1 = [(0, 1, 2), (1, 0, 1), (1, 2, 3), (1, 1, 2)]
     gates_2 = [tc.eye(4, dtype=tc.complex64).reshape(2,2,2,2)]
     which_where_2 = [(0, 0, 1), (0, 1, 2)]
-    n_qubit = 3
-    try:
-        fidelity = cal_circuit_fidelity(gates_1, which_where_1, gates_1, which_where_1, n_qubit)
-        print(fidelity)
-    except Exception as e:
-        assert False, f"cal_circuit_fidelity raised an error: {e}"
+    n_qubit = 4
+    # try:
+    fidelity = cal_circuit_fidelity(gates_1, which_where_1, gates_1, which_where_1, n_qubit)
+    print(fidelity)
+    # except Exception as e:
+    #     assert False, f"cal_circuit_fidelity raised an error: {e}"
     print("All tests passed.")
