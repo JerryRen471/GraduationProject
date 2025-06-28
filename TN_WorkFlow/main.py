@@ -294,6 +294,6 @@ if __name__ == "__main__":
     parser.add_argument('--sample_num', type=int, default=10)
     args = parser.parse_args()
 
-    init_train_para, init_test_para, return_model_para, evol_para, nn_para, save_para = pack_params(chi=16, device=tc.device('cuda:0'), model_para=dict(), csv_file_path='/data/home/scv7454/run/GraduationProject/Data/PXP_test.csv', **vars(args))
-    gate_fidelity, spectrum_diff, similarity = run_with_param(init_train_para, init_test_para, return_model_para, evol_para, nn_para, save_para)
-    print(gate_fidelity, spectrum_diff, similarity)
+    init_train_para, init_test_para, return_model_para, evol_para, nn_para, save_para = pack_params(chi=16, device=tc.device('cuda:0'), model_para=dict(), csv_file_path='/data/home/scv7454/run/GraduationProject/Data/tn_PXP.csv', **vars(args))
+    result = run_with_param(init_train_para, init_test_para, return_model_para, evol_para, nn_para, save_para)
+    print(result)

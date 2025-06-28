@@ -11,8 +11,150 @@ from matplotlib import pyplot as plt
 import pandas as pd
 from Library import TEBD
 import Library.TensorNetwork as TN
-from Library.TensorNetwork import TensorTrain, inner_mps_pack, multi_mags_from_mps_pack, rand_mps_pack
+from Library.TensorNetwork import TensorTrain, inner_mps_pack, multi_mags_from_mps_pack, rand_mps_pack, n_body_gate_to_mpo
 from Library.PhysModule import spin_operators
+
+# Tool functions
+def dagger_gate(gate):
+    shape = list(gate.shape)
+    phy_dim = shape[0]
+    new_gate = gate.reshape([phy_dim ** (len(shape)//2), phy_dim ** (len(shape)//2)]).T.conj().reshape(shape)
+    return new_gate
+
+def fill_seq(pos:list):
+    delta_pos = list(i for i in range(pos[0], pos[-1]+1))
+    for i in pos:
+        delta_pos.remove(i)
+    return delta_pos
+
+def step_function(i:int, pos:list):
+    f = lambda x: 0 if x < 0 else 1
+    y = 0
+    for j in pos[1:]:
+        y = y + f(i - j)
+    return y
+
+def othogonalize_mpo(mpo:list, start:int, end:int, if_trun:bool=True, chi:int=4):
+    """
+    Othogonalize a given mpo from start to end(not include end). 
+    NOTICE: The tensor on end is not othogonal.
+
+    Args:
+        mpo: List of tensors, each tensor has the shape like [chi1, phy_dim, phy_dim, chi2]
+        start: Position to start the othogonalization process
+        end: Position to end the othogonalization process
+    
+    Returns:
+        Othogonalized mpo
+    """
+    step = 1 if start < end else -1
+    for i in range(start, end, step):
+        if step == 1:
+            mpo_i1 = mpo[i]
+            mpo_i2 = mpo[i + 1]
+        else:
+            mpo_i1 = mpo[i - 1]
+            mpo_i2 = mpo[i]
+        tmp = tc.einsum('ijkl, labc -> ijkabc', mpo_i1, mpo_i2)
+        tmp_shape = list(tmp.shape)
+        new_shape = [tmp_shape[0]*tmp_shape[1]*tmp_shape[2], tmp_shape[3]*tmp_shape[4]*tmp_shape[5]]
+        tmp = tmp.reshape(new_shape)
+        u, s, vh = tc.linalg.svd(tmp, full_matrices=False)
+        virtual_dim = u.shape[-1]
+        #truncate
+        if if_trun:
+            virtual_dim = min(chi, virtual_dim)
+            u = u[:, :virtual_dim]
+            s = s[:virtual_dim]
+            vh = vh[:virtual_dim, :]
+        if step == 1:
+            mpo_i1_new = u.reshape(tmp_shape[:3]+[virtual_dim])
+            mpo_i2_new = tc.einsum('j, jk -> jk', s, vh).reshape([virtual_dim]+tmp_shape[3:])
+            mpo[i] = mpo_i1_new
+            mpo[i + 1] = mpo_i2_new
+        else:
+            mpo_i1_new = tc.einsum('ij, j->ij', u, s).reshape(tmp_shape[:3]+[virtual_dim])
+            mpo_i2_new = vh.reshape([virtual_dim]+tmp_shape[3:])
+            mpo[i - 1] = mpo_i1_new
+            mpo[i] = mpo_i2_new
+    return mpo
+
+def process_mpo_tensors(mpo_t_list, pos, mpo, device, dtype):
+    """
+    Process MPO tensors and update the mpo list.
+    
+    Args:
+        mpo_t_list: List of MPO tensors
+        pos: List of positions where gates are applied
+        mpo: Current MPO list
+        device: Device for tensor operations
+        dtype: Data type for tensors
+    
+    Returns:
+        Updated mpo list
+    """
+    delta_dim_list = [mpo_t_list[step_function(i, pos)].shape[-1] for i in range(pos[0], pos[-1]+1)]
+    delta_pos = fill_seq(pos)
+
+    gate_idx = 0
+    for i in range(pos[0], pos[-1]+1):
+        mpo_i = mpo[i]
+        
+        # 判断要作用的是 mpo 还是 delta 张量
+        if i in pos:
+            gate = mpo_t_list[gate_idx]
+            gate_idx += 1
+        elif i in delta_pos:
+            delta_dim = delta_dim_list[i]
+            delta = tc.einsum('il, jk -> ijkl', tc.eys(delta_dim, device=device, dtype=dtype), tc.eys(2, device=device, dtype=dtype))
+            gate = delta
+        # 判断之前的位置是否已经有张量
+        # 如果没有，则直接把要作用的 gate 赋值
+        if mpo_i == None:
+            mpo[i] = gate
+        # 否则，计算要作用的 gate 和已经有的张量的收缩，并在收缩完成后 reshape 为四个脚的张量
+        else:
+            mpo_i_tmp = tc.einsum('ijkl, akcd-> iajcld', gate, mpo_i)
+            un_flatten_shape = mpo_i_tmp.shape
+            flatten_shape = [un_flatten_shape[0]*un_flatten_shape[1], un_flatten_shape[2], un_flatten_shape[3], un_flatten_shape[4]*un_flatten_shape[5]]
+            mpo[i] = mpo_i_tmp.reshape(flatten_shape)
+    
+    return mpo
+
+def mpo_act_gates(gates, which_where, n_qubit, mpo=None, device=tc.device('cpu'), dtype=tc.complex64):
+    if mpo == None:
+        mpo = list(tc.eye(2, device=device, dtype=dtype).reshape([1, 2, 2, 1]) for _ in range(n_qubit))
+    center = []
+    for i_pos in which_where:
+        gate = gates[i_pos[0]]
+        pos = list(i_pos[1:])
+        print(pos)
+        mpo_t_list = n_body_gate_to_mpo(gate=gate, n=len(pos), device=device, dtype=dtype)
+        # print(len(gate_list))
+        affected_pos = pos[:] + center[:]
+        affected_pos.sort()
+        mpo = othogonalize_mpo(mpo, start=affected_pos[0], end=pos[0], if_trun=True)
+        mpo = othogonalize_mpo(mpo, start=affected_pos[-1], end=pos[-1], if_trun=True)
+        mpo = process_mpo_tensors(mpo_t_list, pos, mpo, device, dtype)
+        center = pos[:]
+    return mpo
+
+def inverse_circuit(gates, which_where):
+    new_gates = []
+    new_which_where = []
+    for gate in gates[:]:
+        new_gates.append(dagger_gate(gate))
+    for pos in which_where[::-1]:
+        new_which_where.append(pos[:])
+    return new_gates, new_which_where
+
+def trace_mpo(mpo):
+    tmp = mpo[0]
+    for mpo_i in mpo[1:]:
+        assert len(mpo_i.shape) == 4
+        tmp = tc.einsum('ijjl, lbcd -> ibcd', tmp, mpo_i)
+    trace = tc.einsum('ijjl -> il', tmp).squeeze()
+    return trace
 
 def merge_TN_pack(TN_pack_list):
     '''
@@ -30,6 +172,7 @@ def merge_TN_pack(TN_pack_list):
     merged_TN = TN.TensorTrain_pack(tensor_packs=new_node_list, length=TN_pack_list[0].length, chi=TN_pack_list[0].chi, center=TN_pack_list[0].center, device=TN_pack_list[0].device, dtype=TN_pack_list[0].dtype, initialize=False)
     return merged_TN
 
+# Stat functions
 def cal_gate_fidelity(E:tc.Tensor, U:tc.Tensor):
     """
     Calculate gate fidelity between two quantum circuits.
@@ -46,71 +189,22 @@ def cal_gate_fidelity(E:tc.Tensor, U:tc.Tensor):
     gate_fidelity = 1/(n*(n+1))*(n + tc.abs(trace)**2)
     return gate_fidelity
 
-def cal_gate_fidelity_from_mpo(qc_gates, evol_gates, qc_which_where, evol_which_where, num_basis=10):
-    """
-    Calculate gate fidelity between two quantum circuits represented as gate lists
-    using basis states.
-    
-    Args:
-        qc_gates: List of gates representing the learned quantum circuit
-        evol_gates: List of gates representing the target evolution
-        qc_which_where: List specifying which gates act on which spins for quantum circuit
-                       Format: [[which_gate, spin1, spin2, ...], ...]
-        evol_which_where: List specifying which gates act on which spins for evolution
-                         Format: [[which_gate, spin1, spin2, ...], ...]
-        num_basis: Number of basis states to use
-    
-    Returns:
-        Gate fidelity
-    """
-    # Get device and dtype from the first gate
-    device = qc_gates[0].device
-    dtype = qc_gates[0].dtype
-    
+def cal_circuit_fidelity(gates_1, which_where_1, gates_2, which_where_2):
+    device = gates_1[0].device
+    dtype = gates_1[0].dtype
     # Determine the number of qubits from both which_where lists
-    n_qubits = max(
-        max([max(pos[1:]) for pos in qc_which_where]) + 1,
-        max([max(pos[1:]) for pos in evol_which_where]) + 1
+    n_qubit = max(
+        max([max(pos[1:]) for pos in which_where_1]) + 1,
+        max([max(pos[1:]) for pos in which_where_2]) + 1
     )
-    
-    # Create computational basis states
-    basis_states = []
-    for i in range(min(num_basis, 2**n_qubits)):
-        # Create basis state
-        basis_state = rand_mps_pack(1, n_qubits, chi=10, device=device, dtype=dtype)
-        basis_states.append(basis_state)
-    
-    # Apply both circuits to the basis states
-    qc_outputs = []
-    evol_outputs = []
-    for state in basis_states:
-        # Apply learned circuit
-        qc_state = deepcopy(state)
-        for n in range(len(qc_which_where)):
-            qc_state.act_n_body_gate(qc_gates[qc_which_where[n][0]], qc_which_where[n][1:])
-        qc_outputs.append(qc_state)
-        
-        # Apply target evolution
-        evol_state = deepcopy(state)
-        for n in range(len(evol_which_where)):
-            evol_state.act_n_body_gate(evol_gates[evol_which_where[n][0]], evol_which_where[n][1:])
-        evol_outputs.append(evol_state)
-    
-    # Calculate overlaps between outputs
-    overlaps = []
-    for i in range(len(basis_states)):
-        overlap = inner_mps_pack(qc_outputs[i], evol_outputs[i])
-        overlaps.append(tc.abs(overlap).item())
-    
-    # Calculate average overlap
-    avg_overlap = np.mean(overlaps)
-    
-    # Calculate gate fidelity using the formula: F_gate = (d*F_avg^2 - 1)/(d-1)
-    # where d is the dimension of the Hilbert space (2^n_qubits)
-    d = 2**n_qubits
-    gate_fidelity = (d * avg_overlap**2 - 1) / (d - 1)
-    
-    return gate_fidelity
+    mpo = mpo_act_gates(gates_1, which_where=which_where_1, n_qubit=n_qubit, device=device, dtype=dtype)
+    gates_2, which_where_2 = inverse_circuit(gates_2, which_where_2)
+    mpo = mpo_act_gates(gates=gates_2, which_where=which_where_2, n_qubit=n_qubit, mpo=mpo, device=device, dtype=dtype)
+    trace = trace_mpo(mpo)
+    print(trace)
+    d = 2 ** n_qubit
+    fidelity = 1 / (d * (d + 1)) * (d + tc.abs(trace)**2)
+    return fidelity
 
 def cal_similarity(E:tc.Tensor, U:tc.Tensor):
     '''
@@ -545,12 +639,11 @@ def main(
         
         # Calculate gate fidelity
         try:
-            gate_fidelity = cal_gate_fidelity_from_mpo(
-                qc_gates=qc_tn['gates'],
-                evol_gates=evol_tn['gates'],
-                qc_which_where=qc_tn['which_where'],
-                evol_which_where=evol_tn['which_where'],
-                num_basis=100
+            gate_fidelity = cal_circuit_fidelity(
+                gates_1=qc_tn['gates'],
+                gates_2=evol_tn['gates'],
+                which_where_1=qc_tn['which_where'],
+                which_where_2=evol_tn['which_where']
             )
             data['gate_fidelity'] = [float(gate_fidelity)]
             return_dict['gate_fidelity'] = gate_fidelity
@@ -560,17 +653,17 @@ def main(
             print('qc_tn[which_where]', qc_tn['which_where'])
             print('evol_tn[which_where]', evol_tn['which_where'])
         
-        # Calculate similarity
-        similarity = cal_similarity_from_mpo(
-            qc_gates=qc_tn['gates'],
-            evol_gates=evol_tn['gates'],
-            qc_which_where=qc_tn['which_where'],
-            evol_which_where=evol_tn['which_where'],
-            num_basis=10
-        )
-        data['similarity'] = [float(similarity)]
-        return_dict['similarity'] = similarity
-        print(f"Similarity: {similarity:.6f}")
+        # # Calculate similarity
+        # similarity = cal_similarity_from_mpo(
+        #     qc_gates=qc_tn['gates'],
+        #     evol_gates=evol_tn['gates'],
+        #     qc_which_where=qc_tn['which_where'],
+        #     evol_which_where=evol_tn['which_where'],
+        #     num_basis=10
+        # )
+        # data['similarity'] = [float(similarity)]
+        # return_dict['similarity'] = similarity
+        # print(f"Similarity: {similarity:.6f}")
         
         # Calculate magnetization evolution if requested
         if para.get('calc_mag_evolution', False):
