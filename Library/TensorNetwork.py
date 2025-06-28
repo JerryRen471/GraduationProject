@@ -2,7 +2,7 @@ from copy import deepcopy
 from platform import node
 import time
 from turtle import left, right
-from debugpy import connect
+# from debugpy import connect
 import torch as tc
 import numpy as np
 from Library.BasicFun import pad_and_cat
